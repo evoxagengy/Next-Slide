@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, ExternalLink, Presentation, MonitorX, RefreshCcw } from "lucide-react";
 
@@ -41,12 +41,25 @@ type PlayerState =
   | { status: "empty"; name: string; companyName: string }
   | ReadyState;
 
+type EmbedDecision = {
+  checking: boolean;
+  blocked: boolean;
+  reason: string | null;
+};
+
+const DEFAULT_EMBED_DECISION: EmbedDecision = {
+  checking: false,
+  blocked: false,
+  reason: null
+};
+
 export function TVPlayer({ publicToken }: { publicToken: string }) {
   const [state, setState] = useState<PlayerState>({ status: "loading" });
   const [index, setIndex] = useState(0);
   const [clock, setClock] = useState(() => new Date());
   const [iframeError, setIframeError] = useState(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
+  const [embedDecision, setEmbedDecision] = useState<EmbedDecision>(DEFAULT_EMBED_DECISION);
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +87,12 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   const currentSlide = state.status === "ready" ? state.slides[index] : null;
   const durationMs = (currentSlide?.duration || 15) * 1000;
 
+  const currentEmbedUrl = useMemo(() => {
+    if (!currentSlide?.contentUrl) return null;
+    if (currentSlide.type === "POWERPOINT") return toPowerPointEmbedUrl(currentSlide.contentUrl);
+    return currentSlide.contentUrl;
+  }, [currentSlide]);
+
   useEffect(() => {
     if (state.status !== "ready" || state.slides.length === 0) return;
     setIframeError(false);
@@ -92,6 +111,41 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     }, currentSlide.refreshInterval * 60_000);
     return () => window.clearInterval(timer);
   }, [currentSlide]);
+
+  useEffect(() => {
+    const shouldCheck =
+      !!currentSlide?.contentUrl &&
+      currentSlide.openMode !== "NEW_TAB" &&
+      (currentSlide.type === "URL" || currentSlide.type === "DASHBOARD");
+
+    if (!shouldCheck) {
+      setEmbedDecision(DEFAULT_EMBED_DECISION);
+      return;
+    }
+
+    const controller = new AbortController();
+    setEmbedDecision({ checking: true, blocked: false, reason: null });
+
+    fetch(`/api/embed-check?url=${encodeURIComponent(currentSlide.contentUrl)}`, {
+      cache: "no-store",
+      signal: controller.signal
+    })
+      .then((response) => response.json())
+      .then((data: { blocked?: boolean; reason?: string | null }) => {
+        setEmbedDecision({
+          checking: false,
+          blocked: Boolean(data.blocked),
+          reason: data.reason || null
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setEmbedDecision({ checking: false, blocked: false, reason: null });
+        }
+      });
+
+    return () => controller.abort();
+  }, [currentSlide?.id, currentSlide?.contentUrl, currentSlide?.openMode, currentSlide?.type]);
 
   if (state.status === "loading") return <StatusScreen title="Carregando Next Slide" description="Preparando player em tela cheia." />;
   if (state.status === "invalid") return <StatusScreen icon="error" title="Link inválido" description="Token não encontrado ou link regenerado pelo administrador." />;
@@ -116,7 +170,16 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
           className="relative z-10 h-full w-full"
           style={{ backgroundColor: currentSlide?.backgroundColor || "#070B12" }}
         >
-          {currentSlide && <SlideRenderer slide={currentSlide} iframeKey={iframeReloadKey} iframeError={iframeError} onIframeError={() => setIframeError(true)} />}
+          {currentSlide && (
+            <SlideRenderer
+              slide={currentSlide}
+              iframeKey={iframeReloadKey}
+              iframeError={iframeError}
+              embedDecision={embedDecision}
+              embedUrl={currentEmbedUrl}
+              onIframeError={() => setIframeError(true)}
+            />
+          )}
         </motion.section>
       </AnimatePresence>
       <div className="pointer-events-none absolute bottom-6 left-6 right-6 z-20 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/30 px-5 py-3 backdrop-blur-xl">
@@ -136,19 +199,40 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   );
 }
 
-function SlideRenderer({ slide, iframeKey, iframeError, onIframeError }: { slide: PlayerSlide; iframeKey: number; iframeError: boolean; onIframeError: () => void }) {
+function SlideRenderer({
+  slide,
+  iframeKey,
+  iframeError,
+  embedDecision,
+  embedUrl,
+  onIframeError
+}: {
+  slide: PlayerSlide;
+  iframeKey: number;
+  iframeError: boolean;
+  embedDecision: EmbedDecision;
+  embedUrl: string | null;
+  onIframeError: () => void;
+}) {
   if (slide.type === "TEXT") return <TextSlide slide={slide} />;
+
   if (slide.type === "IMAGE" && slide.contentUrl) {
     return <img src={slide.contentUrl} alt={slide.title || "Imagem do módulo"} className="h-full w-full object-cover" onError={onIframeError} />;
   }
+
   if (slide.type === "POWERPOINT" && slide.contentUrl) {
-    if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} powerPoint />;
-    return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "PowerPoint"} src={toPowerPointEmbedUrl(slide.contentUrl)} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
+    if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} powerPoint reason={iframeError ? "O visualizador online não conseguiu carregar este PowerPoint." : null} />;
+    return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "PowerPoint"} src={embedUrl || toPowerPointEmbedUrl(slide.contentUrl)} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
   }
+
   if ((slide.type === "URL" || slide.type === "DASHBOARD") && slide.contentUrl) {
-    if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} />;
+    if (embedDecision.checking) return <StatusScreen title="Validando incorporação" description="Verificando se este site permite exibição dentro do player." />;
+    if (slide.openMode === "NEW_TAB" || iframeError || embedDecision.blocked) {
+      return <EmbedFallback url={slide.contentUrl} title={slide.title} reason={embedDecision.reason || (iframeError ? "O site recusou a conexão dentro do iframe." : null)} />;
+    }
     return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "Conteúdo externo"} src={slide.contentUrl} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
   }
+
   return <StatusScreen title="Slide sem conteúdo" description="Revise a configuração deste slide no painel administrativo." />;
 }
 
@@ -182,19 +266,23 @@ function TextSlide({ slide }: { slide: PlayerSlide }) {
   );
 }
 
-function EmbedFallback({ url, title, powerPoint = false }: { url: string; title: string | null; powerPoint?: boolean }) {
+function EmbedFallback({ url, title, powerPoint = false, reason }: { url: string; title: string | null; powerPoint?: boolean; reason?: string | null }) {
   const Icon = powerPoint ? Presentation : MonitorX;
   return (
     <div className="flex h-full items-center justify-center p-10 text-center">
-      <div className="max-w-3xl rounded-3xl border border-border bg-card/90 p-10 shadow-card backdrop-blur-xl">
+      <div className="max-w-4xl rounded-3xl border border-border bg-card/90 p-10 shadow-card backdrop-blur-xl">
         <Icon className="mx-auto text-cyan" size={56} />
         <h1 className="mt-6 text-4xl font-black">{title || (powerPoint ? "PowerPoint" : "Conteúdo externo")}</h1>
         <p className="mt-4 text-lg leading-8 text-muted">
           {powerPoint
-            ? "Este PowerPoint não pôde ser incorporado pelo visualizador online. Use PDF/imagem para máxima compatibilidade ou abra o conteúdo em nova guia."
-            : "Este conteúdo não permite incorporação ou foi configurado para abrir fora do iframe. Use um link compatível com embed ou abra em nova guia."}
+            ? "Este PowerPoint não pôde ser incorporado pelo visualizador online. Para máxima compatibilidade em TV, use imagens/PDF ou um link público compatível."
+            : "Este site não permite ser exibido dentro de outro sistema. Isso é uma proteção do próprio site, não um erro do Next Slide."}
         </p>
-        <a href={absoluteUrl(url)} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-cyan px-6 py-3 font-bold text-white"><ExternalLink size={18} /> Abrir conteúdo</a>
+        {reason && <p className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">{reason}</p>}
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <a href={absoluteUrl(url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-cyan px-6 py-3 font-bold text-white"><ExternalLink size={18} /> Abrir conteúdo</a>
+          <span className="text-sm text-muted">Use um link de embed/publicação para exibir automaticamente na TV.</span>
+        </div>
       </div>
     </div>
   );
