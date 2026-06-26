@@ -60,6 +60,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   const [iframeError, setIframeError] = useState(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [embedDecision, setEmbedDecision] = useState<EmbedDecision>(DEFAULT_EMBED_DECISION);
+  const [remainingSeconds, setRemainingSeconds] = useState(15);
 
   const load = useCallback(async () => {
     try {
@@ -97,8 +98,18 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     if (state.status !== "ready" || state.slides.length === 0) return;
     setIframeError(false);
     setIframeReloadKey((current) => current + 1);
+    setRemainingSeconds(Math.max(1, Math.ceil(durationMs / 1000)));
+
+    const endAt = Date.now() + durationMs;
+    const countdown = window.setInterval(() => {
+      setRemainingSeconds(Math.max(0, Math.ceil((endAt - Date.now()) / 1000)));
+    }, 1000);
     const timer = window.setTimeout(() => setIndex((current) => (current + 1) % state.slides.length), durationMs);
-    return () => window.clearTimeout(timer);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(countdown);
+    };
   }, [state, index, durationMs]);
 
   useEffect(() => {
@@ -179,6 +190,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
               embedDecision={embedDecision}
               embedUrl={currentEmbedUrl}
               onIframeError={() => setIframeError(true)}
+              remainingSeconds={remainingSeconds}
             />
           )}
         </motion.section>
@@ -206,7 +218,8 @@ function SlideRenderer({
   iframeError,
   embedDecision,
   embedUrl,
-  onIframeError
+  onIframeError,
+  remainingSeconds
 }: {
   slide: PlayerSlide;
   iframeKey: number;
@@ -214,6 +227,7 @@ function SlideRenderer({
   embedDecision: EmbedDecision;
   embedUrl: string | null;
   onIframeError: () => void;
+  remainingSeconds: number;
 }) {
   if (slide.type === "TEXT") return <TextSlide slide={slide} />;
 
@@ -222,14 +236,14 @@ function SlideRenderer({
   }
 
   if (slide.type === "POWERPOINT" && slide.contentUrl) {
-    if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} powerPoint reason={iframeError ? "O visualizador online não conseguiu carregar este PowerPoint." : null} />;
+    if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} powerPoint reason={iframeError ? "O visualizador online não conseguiu carregar este PowerPoint." : "Este PowerPoint está configurado como link externo."} remainingSeconds={remainingSeconds} />;
     return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "PowerPoint"} src={embedUrl || toPowerPointEmbedUrl(slide.contentUrl)} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
   }
 
   if ((slide.type === "URL" || slide.type === "DASHBOARD") && slide.contentUrl) {
     if (embedDecision.checking) return <StatusScreen title="Validando incorporação" description="Verificando se este site permite exibição dentro do player." />;
     if (slide.openMode === "NEW_TAB" || iframeError || embedDecision.blocked) {
-      return <EmbedFallback url={slide.contentUrl} title={slide.title} reason={embedDecision.reason || (iframeError ? "O site recusou a conexão dentro do iframe." : null)} />;
+      return <EmbedFallback url={slide.contentUrl} title={slide.title} reason={embedDecision.reason || (iframeError ? "O site recusou a conexão dentro do iframe." : "Este link está configurado como externo.")} remainingSeconds={remainingSeconds} manualMode={slide.openMode === "NEW_TAB"} />;
     }
     return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "Conteúdo externo"} src={slide.contentUrl} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
   }
@@ -267,7 +281,7 @@ function TextSlide({ slide }: { slide: PlayerSlide }) {
   );
 }
 
-function EmbedFallback({ url, title, powerPoint = false, reason }: { url: string; title: string | null; powerPoint?: boolean; reason?: string | null }) {
+function EmbedFallback({ url, title, powerPoint = false, reason, remainingSeconds, manualMode = false }: { url: string; title: string | null; powerPoint?: boolean; reason?: string | null; remainingSeconds: number; manualMode?: boolean }) {
   const Icon = powerPoint ? Presentation : MonitorX;
   return (
     <div className="flex h-full items-center justify-center p-10 text-center">
@@ -277,12 +291,17 @@ function EmbedFallback({ url, title, powerPoint = false, reason }: { url: string
         <p className="mt-4 text-lg leading-8 text-muted">
           {powerPoint
             ? "Este PowerPoint não pôde ser incorporado pelo visualizador online. Para máxima compatibilidade em TV, use imagens/PDF ou um link público compatível."
-            : "Este site não permite ser exibido dentro de outro sistema. Isso é uma proteção do próprio site, não um erro do Next Slide."}
+            : manualMode
+              ? "Este link está configurado para abrir como conteúdo externo. Em TVs 24/7, o Next Slide mantém a apresentação rodando e segue automaticamente para o próximo item."
+              : "Este site não permite ser exibido dentro de outro sistema. Isso é uma proteção do próprio site, não um erro do Next Slide."}
         </p>
         {reason && <p className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">{reason}</p>}
+        <div className="mt-4 rounded-2xl border border-cyan/20 bg-cyan/10 px-4 py-3 text-sm font-semibold text-cyan">
+          O player vai seguir automaticamente para o próximo slide em {Math.max(0, remainingSeconds)}s.
+        </div>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <a href={absoluteUrl(url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-cyan px-6 py-3 font-bold text-white"><ExternalLink size={18} /> Abrir conteúdo</a>
-          <span className="text-sm text-muted">Use um link de embed/publicação para exibir automaticamente na TV.</span>
+          <span className="text-sm text-muted">Para exibir dentro do player, use link de embed/publicação ou libere iframe no sistema de origem.</span>
         </div>
       </div>
     </div>

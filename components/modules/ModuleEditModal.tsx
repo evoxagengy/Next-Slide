@@ -200,18 +200,19 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
                 <div className="flex items-center justify-between border-b border-border p-4">
                   <div>
                     <h3 className="text-lg font-black text-text">Slides do módulo</h3>
-                    <p className="text-sm text-muted">Visual simples: arquivos aparecem pelo nome/miniatura. URLs aparecem apenas para sites.</p>
+                    <p className="text-sm text-muted">Visual simples: arquivos aparecem pelo nome/miniatura. URLs aparecem apenas para sites. Links podem usar modo automático ou link externo.</p>
                   </div>
                   <Badge tone="info">{slides.length} slides</Badge>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-sm">
+                  <table className="w-full min-w-[920px] text-sm">
                     <thead className="bg-white/[0.04] text-left text-xs uppercase tracking-[0.16em] text-muted">
                       <tr>
                         <th className="px-4 py-3">#</th>
                         <th className="px-4 py-3">Tipo</th>
                         <th className="px-4 py-3">Conteúdo</th>
                         <th className="px-4 py-3">Tempo</th>
+                        <th className="px-4 py-3">Modo</th>
                         <th className="px-4 py-3">Status</th>
                         <th className="px-4 py-3 text-right">Ações</th>
                       </tr>
@@ -233,6 +234,7 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
                             </div>
                           </td>
                           <td className="px-4 py-3"><Input className="w-24" type="number" min={3} value={slide.duration} onChange={(event) => setSlides((current) => current.map((item) => item.id === slide.id ? { ...item, duration: Number(event.target.value || 3) } : item))} onBlur={(event) => patchSlide(slide.id, { duration: Number(event.target.value || 3) })} /></td>
+                          <td className="px-4 py-3">{(slide.type === "URL" || slide.type === "DASHBOARD") ? <Select value={slide.openMode} onChange={(event) => patchSlide(slide.id, { openMode: event.target.value as EditableSlide["openMode"] })}><option value="IFRAME">Automático</option><option value="NEW_TAB">Link externo</option></Select> : <span className="text-xs text-muted">Arquivo</span>}</td>
                           <td className="px-4 py-3"><Select value={slide.isActive ? "active" : "inactive"} onChange={(event) => patchSlide(slide.id, { isActive: event.target.value === "active" })}><option value="active">Ativo</option><option value="inactive">Inativo</option></Select></td>
                           <td className="px-4 py-3 text-right"><Button type="button" variant="danger" size="sm" onClick={() => deleteSlide(slide.id)}><Trash2 size={15} /> Excluir</Button></td>
                         </tr>

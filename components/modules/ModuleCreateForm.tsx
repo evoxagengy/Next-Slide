@@ -29,6 +29,7 @@ type SiteItem = {
   url: string;
   duration: string;
   refreshInterval: string;
+  openMode: "IFRAME" | "NEW_TAB";
 };
 
 type ModuleCreateFormProps = {
@@ -70,7 +71,7 @@ function itemFromFile(file: File): MediaItem {
 }
 
 function emptySite(): SiteItem {
-  return { id: makeId(), title: "", url: "", duration: "", refreshInterval: "" };
+  return { id: makeId(), title: "", url: "", duration: "", refreshInterval: "", openMode: "IFRAME" };
 }
 
 async function uploadAsset(file: File) {
@@ -114,7 +115,7 @@ function compactSites(items: SiteItem[], fallbackDuration: number) {
       url: item.url.trim(),
       duration: item.duration ? Number(item.duration) : fallbackDuration,
       fit: "COVER" as const,
-      openMode: "IFRAME" as const,
+      openMode: item.openMode,
       refreshInterval: item.refreshInterval ? Number(item.refreshInterval) : null
     }))
     .filter((item) => item.url.length > 0);
@@ -352,18 +353,19 @@ function SiteTableSection({ items, add, update, remove }: { items: SiteItem[]; a
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border p-5">
-        <div className="flex gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan/30 bg-cyan/10 text-cyan"><Globe2 size={22} /></div><div><h3 className="text-lg font-bold">Sites e dashboards</h3><p className="mt-1 text-sm leading-6 text-muted">Aqui sim você usa URL: Power BI, Grafana, dashboards internos ou sites.</p></div></div>
+        <div className="flex gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan/30 bg-cyan/10 text-cyan"><Globe2 size={22} /></div><div><h3 className="text-lg font-bold">Sites e dashboards</h3><p className="mt-1 text-sm leading-6 text-muted">Aqui sim você usa URL. O modo automático tenta incorporar; se o site bloquear, o player mostra aviso e segue para o próximo slide.</p></div></div>
         <Button type="button" variant="secondary" onClick={add}><Plus size={16} /> Adicionar site</Button>
       </div>
       {items.length === 0 ? <div className="p-5 text-center text-sm text-muted">Nenhum site adicionado.</div> : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-white/[0.04] text-left text-xs uppercase tracking-[0.16em] text-muted"><tr><th className="px-4 py-3">Título</th><th className="px-4 py-3">URL</th><th className="px-4 py-3">Tempo próprio</th><th className="px-4 py-3">Refresh min.</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
+          <table className="w-full min-w-[980px] text-sm">
+            <thead className="bg-white/[0.04] text-left text-xs uppercase tracking-[0.16em] text-muted"><tr><th className="px-4 py-3">Título</th><th className="px-4 py-3">URL</th><th className="px-4 py-3">Modo</th><th className="px-4 py-3">Tempo próprio</th><th className="px-4 py-3">Refresh min.</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
             <tbody className="divide-y divide-border/70">
               {items.map((item) => (
                 <tr key={item.id}>
                   <td className="px-4 py-3"><Input value={item.title} onChange={(event) => update(item.id, { title: event.target.value })} placeholder="Título opcional" /></td>
                   <td className="px-4 py-3"><Input value={item.url} onChange={(event) => update(item.id, { url: event.target.value })} placeholder="https://..." /></td>
+                  <td className="px-4 py-3"><Select value={item.openMode} onChange={(event) => update(item.id, { openMode: event.target.value as "IFRAME" | "NEW_TAB" })}><option value="IFRAME">Automático / embed</option><option value="NEW_TAB">Link externo / aviso</option></Select></td>
                   <td className="px-4 py-3"><Input value={item.duration} type="number" min={3} onChange={(event) => update(item.id, { duration: event.target.value })} placeholder="Usar global" /></td>
                   <td className="px-4 py-3"><Input value={item.refreshInterval} type="number" min={1} onChange={(event) => update(item.id, { refreshInterval: event.target.value })} placeholder="Opcional" /></td>
                   <td className="px-4 py-3 text-right"><Button type="button" variant="danger" size="sm" onClick={() => remove(item.id)}><Trash2 size={15} /> Excluir</Button></td>
