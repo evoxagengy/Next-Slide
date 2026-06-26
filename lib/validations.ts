@@ -49,7 +49,7 @@ const slideBaseSchema = z.object({
 });
 
 function validateSlideContent(value: z.infer<typeof slideBaseSchema>, ctx: z.RefinementCtx) {
-  if ([SlideType.IMAGE, SlideType.URL, SlideType.DASHBOARD].includes(value.type) && !value.contentUrl) {
+  if (([SlideType.IMAGE, SlideType.URL, SlideType.DASHBOARD] as SlideType[]).includes(value.type) && !value.contentUrl) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe uma URL v??lida para este tipo de slide." });
   }
   if (value.type === SlideType.TEXT && !value.title && !value.textContent) {
@@ -77,5 +77,6 @@ export const userUpdateSchema = z.object({
   role: z.nativeEnum(UserRole).optional(),
   isActive: z.boolean().optional()
 });
+
 
 
