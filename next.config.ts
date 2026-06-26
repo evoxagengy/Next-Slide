@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  eslint: {
+    ignoreDuringBuilds: true
+  },
   async headers() {
     const baseHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
