@@ -1,35 +1,29 @@
-# Next Slide - Smart Links v2 Proxy Controlado
+# Next Slide - Hotfix Modal Portal v1
 
-## Objetivo
+## Problema corrigido
 
-Adicionar um modo extra para sites/sistemas próprios que bloqueiam iframe por `X-Frame-Options` ou `frame-ancestors`, sem alterar o sistema de origem.
+O modal de edição estava sendo renderizado dentro da linha/tabela do módulo. Em alguns navegadores/estilos, `position: fixed` pode ficar preso ao contexto visual de um ancestral, principalmente quando há `overflow`, `transform`, `backdrop` ou containers complexos.
 
-## O que foi incluído
+## Correção
 
-- Novo modo de exibição para sites/dashboards: `Sistema próprio / proxy`.
-- Nova rota segura: `/api/proxy/page?url=...`.
-- Allowlist de domínios para evitar proxy aberto.
-- Player usa o proxy somente quando o slide estiver configurado como `PROXY`.
-- Middleware libera `/api/proxy/*` para ser exibido dentro do player, sem `X-Frame-Options: DENY`.
-- Enum Prisma `SlideOpenMode` atualizado com `PROXY`.
-- Fallback mantido se o proxy não conseguir renderizar o sistema.
+- `ModuleEditModal` agora renderiza o modal via `createPortal(..., document.body)`.
+- `ModuleCreateModal` também foi ajustado para portal, evitando o mesmo problema no botão "Novo módulo".
+- O modal usa `z-[9999]`, backdrop próprio e sai totalmente da tabela/card.
+- Clique fora do conteúdo fecha o modal.
+- Scroll do body continua bloqueado enquanto o modal estiver aberto.
 
-## Variável opcional recomendada na Vercel
+## Arquivos alterados
 
-Para liberar domínios próprios adicionais, configure:
+- components/modules/ModuleEditModal.tsx
+- components/modules/ModuleCreateModal.tsx
 
-```txt
-NEXT_SLIDE_PROXY_ALLOWED_HOSTS=cartaconvitecerradao.vercel.app
-```
+## Validação realizada
 
-Pode usar múltiplos domínios separados por vírgula:
+- Arquivos lidos e revisados manualmente.
+- Verificada a estrutura de JSX/TSX.
+- Validação de sintaxe com TypeScript `transpileModule` nos dois arquivos alterados.
+- ZIP conferido sem `.env`, `.env.local`, `node_modules`, `.next`, `.vercel` ou segredos.
 
-```txt
-NEXT_SLIDE_PROXY_ALLOWED_HOSTS=cartaconvitecerradao.vercel.app,outro-sistema.vercel.app
-```
+## Observação
 
-O domínio `cartaconvitecerradao.vercel.app` já está liberado por padrão no código.
-
-## Limitações técnicas
-
-Esse modo tenta renderizar a página por proxy no domínio do Next Slide. Funciona melhor para páginas públicas e dashboards simples. Pode falhar em páginas com login, cookies privados, chamadas internas absolutas complexas, autenticação cross-site ou scripts que assumem domínio próprio.
+Não altera banco, Prisma, APIs ou regras de negócio. É um hotfix visual/comportamental dos modais.

@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { ModuleCreateForm } from "@/components/modules/ModuleCreateForm";
 import { Button } from "@/components/ui/button";
 
 export function ModuleCreateModal() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -17,11 +23,13 @@ export function ModuleCreateModal() {
     };
   }, [open]);
 
-  return (
-    <>
-      <Button type="button" onClick={() => setOpen(true)}><Plus size={18} /> Novo módulo</Button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm lg:p-8">
+  const modal = open ? (
+    <div
+      className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm lg:p-8"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setOpen(false);
+      }}
+    >
           <div className="w-full max-w-6xl overflow-hidden rounded-3xl border border-border bg-background shadow-card">
             <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-5 py-4 backdrop-blur-xl">
               <div>
@@ -34,9 +42,14 @@ export function ModuleCreateModal() {
             <div className="max-h-[calc(100vh-150px)] overflow-y-auto p-4 lg:p-6">
               <ModuleCreateForm modalMode onCancel={() => setOpen(false)} onCreated={() => setOpen(false)} />
             </div>
-          </div>
-        </div>
-      )}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <Button type="button" onClick={() => setOpen(true)}><Plus size={18} /> Novo módulo</Button>
+      {mounted && modal ? createPortal(modal, document.body) : null}
     </>
   );
 }

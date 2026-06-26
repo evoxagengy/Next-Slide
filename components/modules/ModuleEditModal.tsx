@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ExternalLink, FileText, Image as ImageIcon, Link2, Presentation, Save, Trash2, UploadCloud, X } from "lucide-react";
 import { ModuleRow, ModuleSlideRow } from "@/components/modules/ModulesTable";
@@ -65,6 +66,11 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
   const [logoUrl, setLogoUrl] = useState(module.logoUrl || "");
   const [logoPreview, setLogoPreview] = useState(module.logoUrl || "");
   const [slides, setSlides] = useState<EditableSlide[]>(module.slides);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -145,11 +151,13 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
     router.refresh();
   }
 
-  return (
-    <>
-      <span onClick={() => setOpen(true)}>{trigger}</span>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm lg:p-8">
+  const modal = open ? (
+    <div
+      className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm lg:p-8"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setOpen(false);
+      }}
+    >
           <div className="w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-background shadow-card">
             <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-5 py-4 backdrop-blur-xl">
               <div>
@@ -255,9 +263,14 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <span className="inline-flex" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>{trigger}</span>
+      {mounted && modal ? createPortal(modal, document.body) : null}
     </>
   );
 }
