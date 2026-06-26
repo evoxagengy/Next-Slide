@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "npm ci --no-audit --no-fund --prefer-offline=false",
-  "buildCommand": "npx prisma db push && npx prisma generate && next build"
+  "installCommand": "corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm install --no-frozen-lockfile",
+  "buildCommand": "corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm exec prisma db push && pnpm exec prisma generate && pnpm exec next build"
 }
