@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum LicensePlan {
+  TRIAL      @map("trial")
+  PRO        @map("pro")
+  ENTERPRISE @map("enterprise")
+}
+
+enum LicenseStatus {
+  ACTIVE    @map("active")
+  TRIAL     @map("trial")
+  EXPIRED   @map("expired")
+  SUSPENDED @map("suspended")
+  CANCELLED @map("cancelled")
+}
+
+enum SlideType {
+  IMAGE
+  URL
+  DASHBOARD
+  TEXT
+}
+
+enum SlideFit {
+  COVER
+  CONTAIN
+}
+
+enum SlideOpenMode {
+  IFRAME
+  NEW_TAB
+}
+
+enum SecuritySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model License {
+  id                 String        @id @default(cuid())
+  companyName        String
+  plan               LicensePlan   @default(TRIAL)
+  status             LicenseStatus @default(TRIAL)
+  maxUsers           Int           @default(1)
+  maxModules         Int           @default(2)
+  maxSlidesPerModule Int           @default(10)
+  startsAt           DateTime      @default(now())
+  expiresAt          DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  users          User[]
+  modules        SlideModule[]
+  auditLogs      AuditLog[]
+  securityEvents SecurityEvent[]
+
+  @@index([status])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  licenseId    String
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         UserRole  @default(VIEWER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  license        License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  sessions       Session[]
+  createdModules SlideModule[]  @relation("CreatedModules")
+  auditLogs      AuditLog[]
+  securityEvents SecurityEvent[]
+
+  @@index([licenseId])
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model SlideModule {
+  id                 String   @id @default(cuid())
+  licenseId          String
+  name               String
+  description        String?
+  slug               String
+  publicTokenHash    String   @unique
+  publicTokenEncrypted String
+  publicTokenIv      String
+  isActive           Boolean  @default(true)
+  defaultDuration    Int      @default(15)
+  defaultTransition  String   @default("fade")
+  theme              String   @default("next-dark")
+  logoUrl            String?
+  lastTokenRotatedAt DateTime @default(now())
+  createdById        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  license  License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("CreatedModules", fields: [createdById], references: [id])
+  slides   Slide[]
+
+  @@unique([licenseId, slug])
+  @@index([licenseId])
+  @@index([isActive])
+}
+
+model Slide {
+  id              String        @id @default(cuid())
+  moduleId        String
+  type            SlideType
+  title           String?
+  description     String?
+  contentUrl      String?
+  textContent     String?
+  duration        Int           @default(15)
+  sortOrder       Int           @map("order")
+  isActive        Boolean       @default(true)
+  fit             SlideFit      @default(COVER)
+  backgroundColor String?       @default("#070B12")
+  refreshInterval Int?
+  openMode        SlideOpenMode @default(IFRAME)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  module SlideModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId])
+  @@index([sortOrder])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  licenseId String
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([licenseId])
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+model SecurityEvent {
+  id        String           @id @default(cuid())
+  licenseId String?
+  userId    String?
+  eventType String
+  severity  SecuritySeverity @default(LOW)
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  license License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([licenseId])
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model LoginAttempt {
+  id            String    @id @default(cuid())
+  emailHash     String
+  ipHash        String
+  attempts      Int       @default(0)
+  lockedUntil   DateTime?
+  lastAttemptAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([emailHash, ipHash])
+  @@index([lockedUntil])
+}
