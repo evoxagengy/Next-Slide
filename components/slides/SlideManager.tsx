@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 
 type Slide = {
   id: string;
-  type: "IMAGE" | "URL" | "DASHBOARD" | "TEXT";
+  type: "IMAGE" | "URL" | "DASHBOARD" | "POWERPOINT" | "TEXT";
   title: string | null;
   description: string | null;
   contentUrl: string | null;
@@ -113,9 +113,9 @@ export function SlideManager({ moduleId, defaultDuration, initialSlides }: { mod
     <div className="space-y-6">
       <Card className="p-5">
         <h3 className="text-lg font-bold">Adicionar slide</h3>
-        <p className="mt-1 text-sm text-muted">Use imagem por URL, dashboard, site ou texto. Arquivos não são salvos no filesystem da Vercel.</p>
+        <p className="mt-1 text-sm text-muted">Use imagem por URL, dashboard, site, PowerPoint ou texto. Arquivos não são salvos no filesystem da Vercel.</p>
         <form id="create-slide-form" action={create} className="mt-5 grid gap-4 lg:grid-cols-2">
-          <Field label="Tipo"><Select name="type" defaultValue="IMAGE"><option value="IMAGE">Imagem</option><option value="URL">Site / URL</option><option value="DASHBOARD">Dashboard</option><option value="TEXT">Texto</option></Select></Field>
+          <Field label="Tipo"><Select name="type" defaultValue="IMAGE"><option value="IMAGE">Imagem</option><option value="URL">Site / URL</option><option value="DASHBOARD">Dashboard</option><option value="POWERPOINT">PowerPoint</option><option value="TEXT">Texto</option></Select></Field>
           <Field label="Tempo em segundos"><Input name="duration" type="number" min={3} defaultValue={defaultDuration} /></Field>
           <Field label="Título"><Input name="title" placeholder="Título opcional" /></Field>
           <Field label="URL do conteúdo"><Input name="contentUrl" placeholder="https://..." /></Field>
@@ -140,7 +140,7 @@ export function SlideManager({ moduleId, defaultDuration, initialSlides }: { mod
               <Badge tone={slide.isActive ? "success" : "warning"}>{slide.isActive ? "Ativo" : "Inativo"}</Badge>
             </div>
             <form action={(formData) => update(slide.id, formData)} className="grid gap-4 lg:grid-cols-2">
-              <Field label="Tipo"><Select name="type" defaultValue={slide.type}><option value="IMAGE">Imagem</option><option value="URL">Site / URL</option><option value="DASHBOARD">Dashboard</option><option value="TEXT">Texto</option></Select></Field>
+              <Field label="Tipo"><Select name="type" defaultValue={slide.type}><option value="IMAGE">Imagem</option><option value="URL">Site / URL</option><option value="DASHBOARD">Dashboard</option><option value="POWERPOINT">PowerPoint</option><option value="TEXT">Texto</option></Select></Field>
               <Field label="Tempo"><Input name="duration" type="number" defaultValue={slide.duration} min={3} /></Field>
               <Field label="Título"><Input name="title" defaultValue={slide.title || ""} /></Field>
               <Field label="URL"><Input name="contentUrl" defaultValue={slide.contentUrl || ""} /></Field>

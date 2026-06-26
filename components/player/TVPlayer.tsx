@@ -1,8 +1,37 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, ExternalLink, MonitorX, RefreshCcw } from "lucide-react";
+import { Clock, ExternalLink, FilePresentation, MonitorX, RefreshCcw } from "lucide-react";
+
+type PlayerSlide = {
+  id: string;
+  type: "IMAGE" | "URL" | "DASHBOARD" | "POWERPOINT" | "TEXT";
+  title: string | null;
+  description: string | null;
+  contentUrl: string | null;
+  textContent: string | null;
+  duration: number;
+  fit: string;
+  backgroundColor: string | null;
+  refreshInterval: number | null;
+  openMode: string;
+};
+
+type ReadyState = {
+  status: "ready";
+  module: {
+    id: string;
+    name: string;
+    description: string | null;
+    theme: string;
+    defaultDuration: number;
+    defaultTransition: string;
+    logoUrl: string | null;
+  };
+  company: { name: string };
+  slides: PlayerSlide[];
+};
 
 type PlayerState =
   | { status: "loading" }
@@ -10,30 +39,14 @@ type PlayerState =
   | { status: "license_unavailable"; companyName: string }
   | { status: "module_inactive"; name: string }
   | { status: "empty"; name: string; companyName: string }
-  | {
-      status: "ready";
-      module: { id: string; name: string; description: string | null; theme: string; defaultDuration: number; logoUrl: string | null };
-      company: { name: string };
-      slides: Array<{
-        id: string;
-        type: "IMAGE" | "URL" | "DASHBOARD" | "TEXT";
-        title: string | null;
-        description: string | null;
-        contentUrl: string | null;
-        textContent: string | null;
-        duration: number;
-        fit: string;
-        backgroundColor: string | null;
-        refreshInterval: number | null;
-        openMode: string;
-      }>;
-    };
+  | ReadyState;
 
 export function TVPlayer({ publicToken }: { publicToken: string }) {
   const [state, setState] = useState<PlayerState>({ status: "loading" });
   const [index, setIndex] = useState(0);
   const [clock, setClock] = useState(() => new Date());
   const [iframeError, setIframeError] = useState(false);
+  const [iframeReloadKey, setIframeReloadKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -64,13 +77,19 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   useEffect(() => {
     if (state.status !== "ready" || state.slides.length === 0) return;
     setIframeError(false);
+    setIframeReloadKey((current) => current + 1);
     const timer = window.setTimeout(() => setIndex((current) => (current + 1) % state.slides.length), durationMs);
     return () => window.clearTimeout(timer);
   }, [state, index, durationMs]);
 
   useEffect(() => {
-    if (!currentSlide || currentSlide.type !== "DASHBOARD" || !currentSlide.refreshInterval) return;
-    const timer = window.setInterval(() => setIframeError(false), currentSlide.refreshInterval * 60_000);
+    if (!currentSlide || !currentSlide.refreshInterval) return;
+    const isEmbeddableType = currentSlide.type === "URL" || currentSlide.type === "DASHBOARD" || currentSlide.type === "POWERPOINT";
+    if (!isEmbeddableType) return;
+    const timer = window.setInterval(() => {
+      setIframeError(false);
+      setIframeReloadKey((current) => current + 1);
+    }, currentSlide.refreshInterval * 60_000);
     return () => window.clearInterval(timer);
   }, [currentSlide]);
 
@@ -80,20 +99,24 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   if (state.status === "module_inactive") return <StatusScreen icon="warning" title="Módulo inativo" description="Este módulo foi desativado temporariamente." />;
   if (state.status === "empty") return <StatusScreen title="Módulo sem slides" description="Adicione slides ativos para iniciar a exibição na TV." />;
 
+  const transitionDuration = state.module.defaultTransition === "cut" ? 0 : 0.45;
+  const motionInitial = state.module.defaultTransition === "cut" ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 1.01 };
+  const motionExit = state.module.defaultTransition === "cut" ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.995 };
+
   return (
     <main className="tv-safe relative h-screen w-screen overflow-hidden bg-background text-text">
       <div className="absolute inset-0 bg-radial-blue next-grid" />
       <AnimatePresence mode="wait">
         <motion.section
           key={currentSlide?.id}
-          initial={{ opacity: 0, scale: 1.01 }}
+          initial={motionInitial}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.995 }}
-          transition={{ duration: 0.45 }}
+          exit={motionExit}
+          transition={{ duration: transitionDuration }}
           className="relative z-10 h-full w-full"
           style={{ backgroundColor: currentSlide?.backgroundColor || "#070B12" }}
         >
-          {currentSlide && <SlideRenderer slide={currentSlide} iframeError={iframeError} onIframeError={() => setIframeError(true)} />}
+          {currentSlide && <SlideRenderer slide={currentSlide} iframeKey={iframeReloadKey} iframeError={iframeError} onIframeError={() => setIframeError(true)} />}
         </motion.section>
       </AnimatePresence>
       <div className="pointer-events-none absolute bottom-6 left-6 right-6 z-20 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/30 px-5 py-3 backdrop-blur-xl">
@@ -113,19 +136,34 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   );
 }
 
-function SlideRenderer({ slide, iframeError, onIframeError }: { slide: NonNullable<Extract<PlayerState, { status: "ready" }>["slides"][number]>; iframeError: boolean; onIframeError: () => void }) {
+function SlideRenderer({ slide, iframeKey, iframeError, onIframeError }: { slide: PlayerSlide; iframeKey: number; iframeError: boolean; onIframeError: () => void }) {
   if (slide.type === "TEXT") return <TextSlide slide={slide} />;
   if (slide.type === "IMAGE" && slide.contentUrl) {
     return <img src={slide.contentUrl} alt={slide.title || "Slide"} className={`h-full w-full ${slide.fit === "CONTAIN" ? "object-contain" : "object-cover"}`} onError={onIframeError} />;
   }
+  if (slide.type === "POWERPOINT" && slide.contentUrl) {
+    if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} powerPoint />;
+    return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "PowerPoint"} src={toPowerPointEmbedUrl(slide.contentUrl)} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
+  }
   if ((slide.type === "URL" || slide.type === "DASHBOARD") && slide.contentUrl) {
     if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} />;
-    return <iframe title={slide.title || "Conteúdo externo"} src={slide.contentUrl} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
+    return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "Conteúdo externo"} src={slide.contentUrl} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" onError={onIframeError} />;
   }
   return <StatusScreen title="Slide sem conteúdo" description="Revise a configuração deste slide no painel administrativo." />;
 }
 
-function TextSlide({ slide }: { slide: Extract<PlayerState, { status: "ready" }>["slides"][number] }) {
+function toPowerPointEmbedUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host.includes("view.officeapps.live.com") || host.includes("docs.google.com")) return url;
+    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+  } catch {
+    return url;
+  }
+}
+
+function TextSlide({ slide }: { slide: PlayerSlide }) {
   return (
     <div className="flex h-full items-center justify-center p-12 text-center">
       <div className="max-w-5xl">
@@ -138,13 +176,18 @@ function TextSlide({ slide }: { slide: Extract<PlayerState, { status: "ready" }>
   );
 }
 
-function EmbedFallback({ url, title }: { url: string; title: string | null }) {
+function EmbedFallback({ url, title, powerPoint = false }: { url: string; title: string | null; powerPoint?: boolean }) {
+  const Icon = powerPoint ? FilePresentation : MonitorX;
   return (
     <div className="flex h-full items-center justify-center p-10 text-center">
       <div className="max-w-3xl rounded-3xl border border-border bg-card/90 p-10 shadow-card backdrop-blur-xl">
-        <MonitorX className="mx-auto text-cyan" size={56} />
-        <h1 className="mt-6 text-4xl font-black">{title || "Conteúdo externo"}</h1>
-        <p className="mt-4 text-lg leading-8 text-muted">Este conteúdo não permite incorporação ou foi configurado para abrir fora do iframe. Use um link compatível com embed ou abra em nova guia.</p>
+        <Icon className="mx-auto text-cyan" size={56} />
+        <h1 className="mt-6 text-4xl font-black">{title || (powerPoint ? "PowerPoint" : "Conteúdo externo")}</h1>
+        <p className="mt-4 text-lg leading-8 text-muted">
+          {powerPoint
+            ? "Este PowerPoint precisa estar em uma URL pública compatível com visualização online. Revise o compartilhamento do arquivo ou abra o conteúdo em nova guia."
+            : "Este conteúdo não permite incorporação ou foi configurado para abrir fora do iframe. Use um link compatível com embed ou abra em nova guia."}
+        </p>
         <a href={url} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-cyan px-6 py-3 font-bold text-white"><ExternalLink size={18} /> Abrir conteúdo</a>
       </div>
     </div>

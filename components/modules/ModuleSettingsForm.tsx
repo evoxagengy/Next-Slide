@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 type ModuleSettings = {
@@ -52,7 +53,7 @@ export function ModuleSettingsForm({ module }: { module: ModuleSettings }) {
       <div><Label>Descrição</Label><Textarea name="description" defaultValue={module.description || ""} /></div>
       <div className="grid gap-4 md:grid-cols-2">
         <div><Label>Tempo padrão</Label><Input name="defaultDuration" type="number" min={3} defaultValue={module.defaultDuration} /></div>
-        <div><Label>Transição</Label><Input name="defaultTransition" defaultValue={module.defaultTransition} /></div>
+        <div><Label>Transição</Label><Select name="defaultTransition" defaultValue={module.defaultTransition === "cut" ? "cut" : "fade"}><option value="fade">Fade</option><option value="cut">Cut seco</option></Select></div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div><Label>Tema</Label><Input name="theme" defaultValue={module.theme} /></div>

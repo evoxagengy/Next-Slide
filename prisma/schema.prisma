@@ -32,6 +32,7 @@ enum SlideType {
   IMAGE
   URL
   DASHBOARD
+  POWERPOINT
   TEXT
 }
 

@@ -16,6 +16,7 @@ export type PlayerModuleState =
         description: string | null;
         theme: string;
         defaultDuration: number;
+        defaultTransition: string;
         logoUrl: string | null;
       };
       company: { name: string };
@@ -63,6 +64,7 @@ export async function getPlayerModule(publicToken: string): Promise<PlayerModule
       description: module.description,
       theme: module.theme,
       defaultDuration: module.defaultDuration,
+      defaultTransition: module.defaultTransition,
       logoUrl: module.logoUrl
     },
     company: { name: module.license.companyName },

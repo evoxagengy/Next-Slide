@@ -9,25 +9,54 @@ const passwordSchema = z.string().min(8).superRefine((value, ctx) => {
   }
 });
 
+const optionalUrlSchema = z.string().url("Informe uma URL valida.").optional().or(z.literal("")).nullable();
+const durationSchema = z.coerce.number().int().min(3).max(3600);
+const transitionSchema = z.enum(["fade", "cut"]).default("fade");
+
 export const registerSchema = z.object({
   companyName: z.string().min(2, "Informe o nome da empresa.").max(120),
   name: z.string().min(2, "Informe seu nome.").max(120),
-  email: z.string().email("Informe um e-mail v??lido.").max(180).transform((v) => v.toLowerCase().trim()),
+  email: z.string().email("Informe um e-mail válido.").max(180).transform((v) => v.toLowerCase().trim()),
   password: passwordSchema
 });
 
 export const loginSchema = z.object({
-  email: z.string().email("Informe um e-mail v??lido.").max(180).transform((v) => v.toLowerCase().trim()),
+  email: z.string().email("Informe um e-mail válido.").max(180).transform((v) => v.toLowerCase().trim()),
   password: z.string().min(1, "Informe a senha.")
 });
 
 export const moduleCreateSchema = z.object({
-  name: z.string().min(2, "Informe o nome do m??dulo.").max(120),
+  name: z.string().min(2, "Informe o nome do módulo.").max(120),
   description: z.string().max(500).optional().nullable(),
-  defaultDuration: z.coerce.number().int().min(3).max(3600).default(15),
-  defaultTransition: z.string().max(40).default("fade"),
+  defaultDuration: durationSchema.default(15),
+  defaultTransition: transitionSchema,
   theme: z.string().max(40).default("next-dark"),
-  logoUrl: z.string().url().optional().or(z.literal("")).nullable()
+  logoUrl: optionalUrlSchema
+});
+
+const moduleBulkItemSchema = z.object({
+  title: z.string().max(160).optional().nullable(),
+  description: z.string().max(500).optional().nullable(),
+  url: z.string().url("Informe uma URL valida."),
+  duration: z.coerce.number().int().min(3).max(3600).optional().nullable(),
+  fit: z.nativeEnum(SlideFit).optional().default(SlideFit.COVER),
+  openMode: z.nativeEnum(SlideOpenMode).optional().default(SlideOpenMode.IFRAME),
+  refreshInterval: z.coerce.number().int().min(1).max(1440).optional().nullable()
+});
+
+export const moduleBulkCreateSchema = moduleCreateSchema.extend({
+  imageDuration: durationSchema.default(15),
+  siteDuration: durationSchema.default(30),
+  powerPointDuration: durationSchema.default(30),
+  showSiteEveryImages: z.coerce.number().int().min(0).max(500).default(0),
+  images: z.array(moduleBulkItemSchema).default([]),
+  sites: z.array(moduleBulkItemSchema).default([]),
+  powerPoints: z.array(moduleBulkItemSchema).default([])
+}).superRefine((value, ctx) => {
+  const total = value.images.length + value.sites.length + value.powerPoints.length;
+  if (total === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Adicione pelo menos uma imagem, site ou PowerPoint." });
+  }
 });
 
 export const moduleUpdateSchema = moduleCreateSchema.partial().extend({
@@ -38,9 +67,9 @@ const slideBaseSchema = z.object({
   type: z.nativeEnum(SlideType),
   title: z.string().max(160).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
-  contentUrl: z.string().url().optional().or(z.literal("")).nullable(),
+  contentUrl: optionalUrlSchema,
   textContent: z.string().max(1600).optional().nullable(),
-  duration: z.coerce.number().int().min(3).max(3600).default(15),
+  duration: durationSchema.default(15),
   isActive: z.boolean().default(true),
   fit: z.nativeEnum(SlideFit).default(SlideFit.COVER),
   backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().nullable(),
@@ -49,11 +78,17 @@ const slideBaseSchema = z.object({
 });
 
 function validateSlideContent(value: z.infer<typeof slideBaseSchema>, ctx: z.RefinementCtx) {
-  if (([SlideType.IMAGE, SlideType.URL, SlideType.DASHBOARD] as SlideType[]).includes(value.type) && !value.contentUrl) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe uma URL v??lida para este tipo de slide." });
+  const requiresUrl =
+    value.type === SlideType.IMAGE ||
+    value.type === SlideType.URL ||
+    value.type === SlideType.DASHBOARD ||
+    value.type === SlideType.POWERPOINT;
+
+  if (requiresUrl && !value.contentUrl) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe uma URL válida para este tipo de slide." });
   }
   if (value.type === SlideType.TEXT && !value.title && !value.textContent) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe um t??tulo ou mensagem para o slide de texto." });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Informe um título ou mensagem para o slide de texto." });
   }
 }
 
@@ -77,6 +112,3 @@ export const userUpdateSchema = z.object({
   role: z.nativeEnum(UserRole).optional(),
   isActive: z.boolean().optional()
 });
-
-
-
