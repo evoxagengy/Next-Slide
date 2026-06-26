@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Clock, FilePresentation, Globe2, Image as ImageIcon, Plus, Trash2, Wand2 } from "lucide-react";
+import { Clock, Presentation, Globe2, Image as ImageIcon, Plus, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -221,7 +221,7 @@ export function ModuleCreateForm() {
       />
 
       <MediaSection
-        icon={<FilePresentation size={22} />}
+        icon={<Presentation size={22} />}
         title="PowerPoints"
         description="Use URL pública de arquivo .ppt/.pptx ou link público compatível. O player exibe via Office Viewer quando possível."
         items={powerPoints}

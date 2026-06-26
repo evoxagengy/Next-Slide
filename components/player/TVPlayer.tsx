@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, ExternalLink, FilePresentation, MonitorX, RefreshCcw } from "lucide-react";
+import { Clock, ExternalLink, Presentation, MonitorX, RefreshCcw } from "lucide-react";
 
 type PlayerSlide = {
   id: string;
@@ -177,7 +177,7 @@ function TextSlide({ slide }: { slide: PlayerSlide }) {
 }
 
 function EmbedFallback({ url, title, powerPoint = false }: { url: string; title: string | null; powerPoint?: boolean }) {
-  const Icon = powerPoint ? FilePresentation : MonitorX;
+  const Icon = powerPoint ? Presentation : MonitorX;
   return (
     <div className="flex h-full items-center justify-center p-10 text-center">
       <div className="max-w-3xl rounded-3xl border border-border bg-card/90 p-10 shadow-card backdrop-blur-xl">
