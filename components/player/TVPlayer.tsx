@@ -91,6 +91,9 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   const currentEmbedUrl = useMemo(() => {
     if (!currentSlide?.contentUrl) return null;
     if (currentSlide.type === "POWERPOINT") return toPowerPointEmbedUrl(currentSlide.contentUrl);
+    if ((currentSlide.type === "URL" || currentSlide.type === "DASHBOARD") && currentSlide.openMode === "PROXY") {
+      return toProxyUrl(currentSlide.contentUrl);
+    }
     return currentSlide.contentUrl;
   }, [currentSlide]);
 
@@ -127,7 +130,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     const checkUrl = currentSlide?.contentUrl;
     const shouldCheck =
       Boolean(checkUrl) &&
-      currentSlide?.openMode !== "NEW_TAB" &&
+      currentSlide?.openMode === "IFRAME" &&
       (currentSlide?.type === "URL" || currentSlide?.type === "DASHBOARD");
 
     if (!shouldCheck || !checkUrl) {
@@ -241,6 +244,13 @@ function SlideRenderer({
   }
 
   if ((slide.type === "URL" || slide.type === "DASHBOARD") && slide.contentUrl) {
+    if (slide.openMode === "PROXY") {
+      if (iframeError) {
+        return <EmbedFallback url={slide.contentUrl} title={slide.title} reason="O proxy do Next Slide não conseguiu renderizar este sistema. Verifique se o domínio está liberado em NEXT_SLIDE_PROXY_ALLOWED_HOSTS ou use link de embed/publicação." remainingSeconds={remainingSeconds} proxyMode />;
+      }
+      return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "Sistema próprio"} src={embedUrl || toProxyUrl(slide.contentUrl)} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads allow-top-navigation-by-user-activation" onError={onIframeError} />;
+    }
+
     if (embedDecision.checking) return <StatusScreen title="Validando incorporação" description="Verificando se este site permite exibição dentro do player." />;
     if (slide.openMode === "NEW_TAB" || iframeError || embedDecision.blocked) {
       return <EmbedFallback url={slide.contentUrl} title={slide.title} reason={embedDecision.reason || (iframeError ? "O site recusou a conexão dentro do iframe." : "Este link está configurado como externo.")} remainingSeconds={remainingSeconds} manualMode={slide.openMode === "NEW_TAB"} />;
@@ -254,6 +264,11 @@ function SlideRenderer({
 function absoluteUrl(url: string) {
   if (typeof window === "undefined") return url;
   return new URL(url, window.location.origin).toString();
+}
+
+function toProxyUrl(url: string) {
+  const absolute = absoluteUrl(url);
+  return `/api/proxy/page?url=${encodeURIComponent(absolute)}`;
 }
 
 function toPowerPointEmbedUrl(url: string) {
@@ -281,7 +296,7 @@ function TextSlide({ slide }: { slide: PlayerSlide }) {
   );
 }
 
-function EmbedFallback({ url, title, powerPoint = false, reason, remainingSeconds, manualMode = false }: { url: string; title: string | null; powerPoint?: boolean; reason?: string | null; remainingSeconds: number; manualMode?: boolean }) {
+function EmbedFallback({ url, title, powerPoint = false, reason, remainingSeconds, manualMode = false, proxyMode = false }: { url: string; title: string | null; powerPoint?: boolean; reason?: string | null; remainingSeconds: number; manualMode?: boolean; proxyMode?: boolean }) {
   const Icon = powerPoint ? Presentation : MonitorX;
   return (
     <div className="flex h-full items-center justify-center p-10 text-center">
@@ -291,9 +306,11 @@ function EmbedFallback({ url, title, powerPoint = false, reason, remainingSecond
         <p className="mt-4 text-lg leading-8 text-muted">
           {powerPoint
             ? "Este PowerPoint não pôde ser incorporado pelo visualizador online. Para máxima compatibilidade em TV, use imagens/PDF ou um link público compatível."
-            : manualMode
-              ? "Este link está configurado para abrir como conteúdo externo. Em TVs 24/7, o Next Slide mantém a apresentação rodando e segue automaticamente para o próximo item."
-              : "Este site não permite ser exibido dentro de outro sistema. Isso é uma proteção do próprio site, não um erro do Next Slide."}
+            : proxyMode
+              ? "Tentamos exibir este sistema próprio por proxy controlado, mas a página não respondeu de forma compatível. O player seguirá automaticamente para não travar a TV."
+              : manualMode
+                ? "Este link está configurado para abrir como conteúdo externo. Em TVs 24/7, o Next Slide mantém a apresentação rodando e segue automaticamente para o próximo item."
+                : "Este site não permite ser exibido dentro de outro sistema. Isso é uma proteção do próprio site, não um erro do Next Slide."}
         </p>
         {reason && <p className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">{reason}</p>}
         <div className="mt-4 rounded-2xl border border-cyan/20 bg-cyan/10 px-4 py-3 text-sm font-semibold text-cyan">

@@ -33,6 +33,21 @@ function playerCsp() {
   ].join("; ");
 }
 
+function proxyCsp() {
+  return [
+    "default-src 'self' https: http: data: blob:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:",
+    "style-src 'self' 'unsafe-inline' https: http:",
+    "img-src 'self' data: blob: https: http:",
+    "font-src 'self' data: https: http:",
+    "connect-src 'self' https: http:",
+    "frame-src 'self' https: http: data: blob:",
+    "frame-ancestors 'self'",
+    "base-uri https: http:",
+    "form-action 'self' https: http:"
+  ].join("; ");
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get(SESSION_COOKIE)?.value;
@@ -50,8 +65,10 @@ export function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
-  response.headers.set("Content-Security-Policy", pathname.startsWith("/play") ? playerCsp() : adminCsp());
-  if (!pathname.startsWith("/play")) {
+  const isPlayerRoute = pathname.startsWith("/play");
+  const isProxyRoute = pathname.startsWith("/api/proxy");
+  response.headers.set("Content-Security-Policy", isProxyRoute ? proxyCsp() : isPlayerRoute ? playerCsp() : adminCsp());
+  if (!isPlayerRoute && !isProxyRoute) {
     response.headers.set("X-Frame-Options", "DENY");
   }
   return response;

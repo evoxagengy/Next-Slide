@@ -21,7 +21,7 @@ export type ModuleSlideRow = {
   fit: "COVER" | "CONTAIN";
   backgroundColor: string | null;
   refreshInterval: number | null;
-  openMode: "IFRAME" | "NEW_TAB";
+  openMode: "IFRAME" | "NEW_TAB" | "PROXY";
 };
 
 export type ModuleRow = {

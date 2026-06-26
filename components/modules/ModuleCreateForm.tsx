@@ -29,7 +29,7 @@ type SiteItem = {
   url: string;
   duration: string;
   refreshInterval: string;
-  openMode: "IFRAME" | "NEW_TAB";
+  openMode: "IFRAME" | "NEW_TAB" | "PROXY";
 };
 
 type ModuleCreateFormProps = {
@@ -89,7 +89,7 @@ async function compactFileItems(items: MediaItem[], fallbackDuration: number, fi
     url: string;
     duration: number;
     fit: "COVER" | "CONTAIN";
-    openMode: "IFRAME" | "NEW_TAB";
+    openMode: "IFRAME" | "NEW_TAB" | "PROXY";
     refreshInterval: number | null;
   }>;
 
@@ -353,7 +353,7 @@ function SiteTableSection({ items, add, update, remove }: { items: SiteItem[]; a
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border p-5">
-        <div className="flex gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan/30 bg-cyan/10 text-cyan"><Globe2 size={22} /></div><div><h3 className="text-lg font-bold">Sites e dashboards</h3><p className="mt-1 text-sm leading-6 text-muted">Aqui sim você usa URL. O modo automático tenta incorporar; se o site bloquear, o player mostra aviso e segue para o próximo slide.</p></div></div>
+        <div className="flex gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan/30 bg-cyan/10 text-cyan"><Globe2 size={22} /></div><div><h3 className="text-lg font-bold">Sites e dashboards</h3><p className="mt-1 text-sm leading-6 text-muted">Aqui sim você usa URL. O modo automático tenta incorporar; o modo proxy tenta exibir sistemas próprios que bloqueiam iframe.</p></div></div>
         <Button type="button" variant="secondary" onClick={add}><Plus size={16} /> Adicionar site</Button>
       </div>
       {items.length === 0 ? <div className="p-5 text-center text-sm text-muted">Nenhum site adicionado.</div> : (
@@ -365,7 +365,11 @@ function SiteTableSection({ items, add, update, remove }: { items: SiteItem[]; a
                 <tr key={item.id}>
                   <td className="px-4 py-3"><Input value={item.title} onChange={(event) => update(item.id, { title: event.target.value })} placeholder="Título opcional" /></td>
                   <td className="px-4 py-3"><Input value={item.url} onChange={(event) => update(item.id, { url: event.target.value })} placeholder="https://..." /></td>
-                  <td className="px-4 py-3"><Select value={item.openMode} onChange={(event) => update(item.id, { openMode: event.target.value as "IFRAME" | "NEW_TAB" })}><option value="IFRAME">Automático / embed</option><option value="NEW_TAB">Link externo / aviso</option></Select></td>
+                  <td className="px-4 py-3"><Select value={item.openMode} onChange={(event) => update(item.id, { openMode: event.target.value as "IFRAME" | "NEW_TAB" | "PROXY" })}>
+                      <option value="IFRAME">Automático / embed</option>
+                      <option value="PROXY">Sistema próprio / proxy</option>
+                      <option value="NEW_TAB">Link externo / aviso</option>
+                    </Select></td>
                   <td className="px-4 py-3"><Input value={item.duration} type="number" min={3} onChange={(event) => update(item.id, { duration: event.target.value })} placeholder="Usar global" /></td>
                   <td className="px-4 py-3"><Input value={item.refreshInterval} type="number" min={1} onChange={(event) => update(item.id, { refreshInterval: event.target.value })} placeholder="Opcional" /></td>
                   <td className="px-4 py-3 text-right"><Button type="button" variant="danger" size="sm" onClick={() => remove(item.id)}><Trash2 size={15} /> Excluir</Button></td>

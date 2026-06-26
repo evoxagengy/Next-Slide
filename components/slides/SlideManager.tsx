@@ -23,7 +23,7 @@ type Slide = {
   fit: "COVER" | "CONTAIN";
   backgroundColor: string | null;
   refreshInterval: number | null;
-  openMode: "IFRAME" | "NEW_TAB";
+  openMode: "IFRAME" | "NEW_TAB" | "PROXY";
 };
 
 export function SlideManager({ moduleId, defaultDuration, initialSlides }: { moduleId: string; defaultDuration: number; initialSlides: Slide[] }) {
@@ -120,7 +120,7 @@ export function SlideManager({ moduleId, defaultDuration, initialSlides }: { mod
           <Field label="Título"><Input name="title" placeholder="Título opcional" /></Field>
           <Field label="URL do conteúdo"><Input name="contentUrl" placeholder="https://..." /></Field>
           <Field label="Descrição"><Input name="description" placeholder="Descrição opcional" /></Field>
-          <Field label="Modo de abertura"><Select name="openMode" defaultValue="IFRAME"><option value="IFRAME">Iframe quando permitido</option><option value="NEW_TAB">Nova aba / fallback</option></Select></Field>
+          <Field label="Modo de abertura"><Select name="openMode" defaultValue="IFRAME"><option value="IFRAME">Iframe quando permitido</option><option value="PROXY">Sistema próprio / proxy</option><option value="NEW_TAB">Nova aba / fallback</option></Select></Field>
           <Field label="Ajuste da imagem"><Select name="fit" defaultValue="COVER"><option value="COVER">Cover</option><option value="CONTAIN">Contain</option></Select></Field>
           <Field label="Refresh dashboard (min)"><Input name="refreshInterval" type="number" min={1} placeholder="Opcional" /></Field>
           <div className="lg:col-span-2"><Label>Mensagem de texto</Label><Textarea name="textContent" placeholder="Usado principalmente no tipo TEXT." /></div>
@@ -145,7 +145,7 @@ export function SlideManager({ moduleId, defaultDuration, initialSlides }: { mod
               <Field label="Título"><Input name="title" defaultValue={slide.title || ""} /></Field>
               <Field label="URL"><Input name="contentUrl" defaultValue={slide.contentUrl || ""} /></Field>
               <Field label="Descrição"><Input name="description" defaultValue={slide.description || ""} /></Field>
-              <Field label="Modo"><Select name="openMode" defaultValue={slide.openMode}><option value="IFRAME">Iframe</option><option value="NEW_TAB">Nova aba</option></Select></Field>
+              <Field label="Modo"><Select name="openMode" defaultValue={slide.openMode}><option value="IFRAME">Iframe</option><option value="PROXY">Sistema próprio / proxy</option><option value="NEW_TAB">Nova aba</option></Select></Field>
               <Field label="Fit"><Select name="fit" defaultValue={slide.fit}><option value="COVER">Cover</option><option value="CONTAIN">Contain</option></Select></Field>
               <Field label="Refresh (min)"><Input name="refreshInterval" type="number" defaultValue={slide.refreshInterval || ""} /></Field>
               <div className="lg:col-span-2"><Label>Texto</Label><Textarea name="textContent" defaultValue={slide.textContent || ""} /></div>
