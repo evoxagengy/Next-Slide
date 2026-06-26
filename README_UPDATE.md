@@ -1,12 +1,8 @@
-# Next Slide - Hotfix Embed Fallback v1
+# Next Slide - Hotfix embed fallback v2
 
-Corrige a experiência do player quando sites externos recusam iframe.
+Corrige erro de TypeScript no TVPlayer em `currentSlide.contentUrl` possivelmente nulo durante a verificação de iframe.
 
-Inclui:
-- Verificação server-side de headers X-Frame-Options e CSP frame-ancestors.
-- Fallback elegante no player quando um site bloqueia incorporação.
-- Evita mostrar a tela feia do navegador com "conexão recusada" quando o bloqueio é detectável.
-- Mantém imagens e PowerPoint funcionando normalmente.
+Arquivos alterados:
+- components/player/TVPlayer.tsx
+- app/api/embed-check/route.ts
 
-Observação:
-Sites que bloqueiam iframe não podem ser forçados pelo Next Slide. A solução correta é usar link de embed/publicação do dashboard/site ou converter o conteúdo em imagem/PDF.

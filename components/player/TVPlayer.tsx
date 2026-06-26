@@ -113,12 +113,13 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   }, [currentSlide]);
 
   useEffect(() => {
+    const checkUrl = currentSlide?.contentUrl;
     const shouldCheck =
-      !!currentSlide?.contentUrl &&
-      currentSlide.openMode !== "NEW_TAB" &&
-      (currentSlide.type === "URL" || currentSlide.type === "DASHBOARD");
+      Boolean(checkUrl) &&
+      currentSlide?.openMode !== "NEW_TAB" &&
+      (currentSlide?.type === "URL" || currentSlide?.type === "DASHBOARD");
 
-    if (!shouldCheck) {
+    if (!shouldCheck || !checkUrl) {
       setEmbedDecision(DEFAULT_EMBED_DECISION);
       return;
     }
@@ -126,7 +127,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     const controller = new AbortController();
     setEmbedDecision({ checking: true, blocked: false, reason: null });
 
-    fetch(`/api/embed-check?url=${encodeURIComponent(currentSlide.contentUrl)}`, {
+    fetch(`/api/embed-check?url=${encodeURIComponent(checkUrl)}`, {
       cache: "no-store",
       signal: controller.signal
     })
