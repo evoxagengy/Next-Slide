@@ -152,12 +152,18 @@ function SlideRenderer({ slide, iframeKey, iframeError, onIframeError }: { slide
   return <StatusScreen title="Slide sem conteúdo" description="Revise a configuração deste slide no painel administrativo." />;
 }
 
+function absoluteUrl(url: string) {
+  if (typeof window === "undefined") return url;
+  return new URL(url, window.location.origin).toString();
+}
+
 function toPowerPointEmbedUrl(url: string) {
   try {
-    const parsed = new URL(url);
+    const absolute = absoluteUrl(url);
+    const parsed = new URL(absolute);
     const host = parsed.hostname.toLowerCase();
-    if (host.includes("view.officeapps.live.com") || host.includes("docs.google.com")) return url;
-    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    if (host.includes("view.officeapps.live.com") || host.includes("docs.google.com")) return absolute;
+    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(absolute)}`;
   } catch {
     return url;
   }
@@ -188,7 +194,7 @@ function EmbedFallback({ url, title, powerPoint = false }: { url: string; title:
             ? "Este PowerPoint precisa estar em uma URL pública compatível com visualização online. Revise o compartilhamento do arquivo ou abra o conteúdo em nova guia."
             : "Este conteúdo não permite incorporação ou foi configurado para abrir fora do iframe. Use um link compatível com embed ou abra em nova guia."}
         </p>
-        <a href={url} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-cyan px-6 py-3 font-bold text-white"><ExternalLink size={18} /> Abrir conteúdo</a>
+        <a href={absoluteUrl(url)} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-cyan px-6 py-3 font-bold text-white"><ExternalLink size={18} /> Abrir conteúdo</a>
       </div>
     </div>
   );

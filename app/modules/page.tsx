@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ExternalLink, Plus } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CopyButton } from "@/components/modules/CopyButton";
+import { ModuleCreateModal } from "@/components/modules/ModuleCreateModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,7 @@ export default async function ModulesPage() {
 
   return (
     <AppShell>
-      <PageHeader eyebrow="Apresentações" title="Módulos de slides" description="Cada módulo gera um link público seguro para rodar em uma TV corporativa." action={<Link href="/modules/new"><Button><Plus size={18} /> Novo módulo</Button></Link>} />
+      <PageHeader eyebrow="Apresentações" title="Módulos de slides" description="Cada módulo gera um link público seguro para rodar em uma TV corporativa." action={<ModuleCreateModal />} />
       {modules.length === 0 ? <EmptyState title="Nenhum módulo criado" description="Crie seu primeiro módulo, adicione slides e copie o link do player." /> : (
         <div className="grid gap-4 xl:grid-cols-2">
           {modules.map((module) => {

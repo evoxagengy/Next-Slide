@@ -70,6 +70,7 @@ model License {
   modules        SlideModule[]
   auditLogs      AuditLog[]
   securityEvents SecurityEvent[]
+  mediaAssets    MediaAsset[]
 
   @@index([status])
 }
@@ -91,6 +92,7 @@ model User {
   createdModules SlideModule[]  @relation("CreatedModules")
   auditLogs      AuditLog[]
   securityEvents SecurityEvent[]
+  mediaAssets    MediaAsset[]
 
   @@index([licenseId])
   @@index([role])
@@ -161,6 +163,25 @@ model Slide {
 
   @@index([moduleId])
   @@index([sortOrder])
+}
+
+
+model MediaAsset {
+  id           String   @id @default(cuid())
+  licenseId    String
+  uploadedById String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  dataBase64   String   @db.Text
+  createdAt    DateTime @default(now())
+
+  license    License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([licenseId])
+  @@index([uploadedById])
+  @@index([createdAt])
 }
 
 model AuditLog {

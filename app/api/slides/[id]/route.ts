@@ -3,7 +3,7 @@ import { json, jsonError, handleApiError } from "@/lib/api";
 import { auditLog } from "@/lib/audit";
 import { requireApiRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { assertSameOrigin, normalizeUrl, sanitizeOptionalText } from "@/lib/security";
+import { assertSameOrigin, normalizeContentUrl, sanitizeOptionalText } from "@/lib/security";
 import { slideUpdateSchema } from "@/lib/validations";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -24,7 +24,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         type: data.type,
         title: data.title !== undefined ? sanitizeOptionalText(data.title, 160) : undefined,
         description: data.description !== undefined ? sanitizeOptionalText(data.description, 500) : undefined,
-        contentUrl: data.contentUrl !== undefined ? (data.contentUrl ? normalizeUrl(data.contentUrl) : null) : undefined,
+        contentUrl: data.contentUrl !== undefined ? (data.contentUrl ? normalizeContentUrl(data.contentUrl) : null) : undefined,
         textContent: data.textContent !== undefined ? sanitizeOptionalText(data.textContent, 1600) : undefined,
         duration: data.duration,
         isActive: data.isActive,

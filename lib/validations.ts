@@ -10,6 +10,7 @@ const passwordSchema = z.string().min(8).superRefine((value, ctx) => {
 });
 
 const optionalUrlSchema = z.string().url("Informe uma URL valida.").optional().or(z.literal("")).nullable();
+const optionalContentUrlSchema = z.string().optional().or(z.literal("")).nullable().refine((value) => !value || value.startsWith("/api/assets/") || /^https?:\/\//i.test(value), "Informe uma URL válida ou arquivo enviado.");
 const durationSchema = z.coerce.number().int().min(3).max(3600);
 const transitionSchema = z.enum(["fade", "cut"]).default("fade");
 
@@ -37,7 +38,7 @@ export const moduleCreateSchema = z.object({
 const moduleBulkItemSchema = z.object({
   title: z.string().max(160).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
-  url: z.string().url("Informe uma URL valida."),
+  url: z.string().min(1, "Informe o arquivo ou URL.").refine((value) => value.startsWith("/api/assets/") || /^https?:\/\//i.test(value), "Informe uma URL válida ou envie um arquivo."),
   duration: z.coerce.number().int().min(3).max(3600).optional().nullable(),
   fit: z.nativeEnum(SlideFit).optional().default(SlideFit.COVER),
   openMode: z.nativeEnum(SlideOpenMode).optional().default(SlideOpenMode.IFRAME),
@@ -67,7 +68,7 @@ const slideBaseSchema = z.object({
   type: z.nativeEnum(SlideType),
   title: z.string().max(160).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
-  contentUrl: optionalUrlSchema,
+  contentUrl: optionalContentUrlSchema,
   textContent: z.string().max(1600).optional().nullable(),
   duration: durationSchema.default(15),
   isActive: z.boolean().default(true),

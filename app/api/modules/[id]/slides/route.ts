@@ -5,7 +5,7 @@ import { requireApiRole, requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isLicenseUsable } from "@/lib/license";
 import { canEditSlides } from "@/lib/permissions";
-import { assertSameOrigin, normalizeUrl, sanitizeOptionalText } from "@/lib/security";
+import { assertSameOrigin, normalizeContentUrl, sanitizeOptionalText } from "@/lib/security";
 import { slideCreateSchema } from "@/lib/validations";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -45,7 +45,7 @@ export async function POST(request: Request, ctx: Ctx) {
         type: data.type,
         title: sanitizeOptionalText(data.title, 160),
         description: sanitizeOptionalText(data.description, 500),
-        contentUrl: data.contentUrl ? normalizeUrl(data.contentUrl) : null,
+        contentUrl: data.contentUrl ? normalizeContentUrl(data.contentUrl) : null,
         textContent: sanitizeOptionalText(data.textContent, 1600),
         duration: data.duration || module.defaultDuration,
         sortOrder: (last?.sortOrder || 0) + 1,

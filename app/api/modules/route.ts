@@ -5,7 +5,7 @@ import { requireApiRole, requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isLicenseUsable } from "@/lib/license";
 import { canCreateModules } from "@/lib/permissions";
-import { appUrl, assertSameOrigin, createPublicTokenPayload, decryptSecret, normalizeUrl, sanitizeOptionalText, sanitizeText } from "@/lib/security";
+import { appUrl, assertSameOrigin, createPublicTokenPayload, decryptSecret, normalizeContentUrl, normalizeUrl, sanitizeOptionalText, sanitizeText } from "@/lib/security";
 import { slugify } from "@/lib/utils";
 import { moduleBulkCreateSchema, moduleCreateSchema } from "@/lib/validations";
 
@@ -59,7 +59,7 @@ function toPendingSlide(input: {
     type: input.type,
     title: sanitizeOptionalText(input.item.title || input.fallbackTitle, 160),
     description: sanitizeOptionalText(input.item.description, 500),
-    contentUrl: normalizeUrl(input.item.url),
+    contentUrl: normalizeContentUrl(input.item.url),
     duration: input.item.duration || input.fallbackDuration,
     sortOrder: input.sortOrder,
     fit: input.item.fit || input.fit || SlideFit.COVER,

@@ -112,6 +112,13 @@ export function normalizeUrl(value: string) {
   return url.toString();
 }
 
+
+export function normalizeContentUrl(value: string) {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("/api/assets/")) return trimmed;
+  return normalizeUrl(trimmed);
+}
+
 export function appUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 }
