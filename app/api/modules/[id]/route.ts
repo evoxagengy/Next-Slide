@@ -4,7 +4,7 @@ import { auditLog } from "@/lib/audit";
 import { requireApiRole, requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canDeleteModules, canEditModules } from "@/lib/permissions";
-import { appUrl, assertSameOrigin, decryptSecret, normalizeUrl, sanitizeOptionalText, sanitizeText } from "@/lib/security";
+import { appUrl, assertSameOrigin, decryptSecret, normalizeAssetOrUrl, sanitizeOptionalText, sanitizeText } from "@/lib/security";
 import { moduleUpdateSchema } from "@/lib/validations";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -49,7 +49,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         defaultDuration: data.defaultDuration,
         defaultTransition: data.defaultTransition ? sanitizeText(data.defaultTransition, 40) : undefined,
         theme: data.theme ? sanitizeText(data.theme, 40) : undefined,
-        logoUrl: data.logoUrl !== undefined ? (data.logoUrl ? normalizeUrl(data.logoUrl) : null) : undefined,
+        logoUrl: data.logoUrl !== undefined ? (data.logoUrl ? normalizeAssetOrUrl(data.logoUrl) : null) : undefined,
         isActive: data.isActive
       }
     });

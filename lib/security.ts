@@ -119,8 +119,19 @@ export function normalizeContentUrl(value: string) {
   return normalizeUrl(trimmed);
 }
 
+export function normalizeAssetOrUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith("/api/assets/")) return trimmed;
+  return normalizeUrl(trimmed);
+}
+
 export function appUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (explicit && !explicit.includes("next-slide.vercel.app")) return explicit;
+  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (vercelUrl) return `https://${vercelUrl}`.replace(/\/$/, "");
+  return (explicit || "http://localhost:3000").replace(/\/$/, "");
 }
 
 export function assertSameOrigin(request: Request) {

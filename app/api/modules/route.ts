@@ -5,7 +5,7 @@ import { requireApiRole, requireApiUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isLicenseUsable } from "@/lib/license";
 import { canCreateModules } from "@/lib/permissions";
-import { appUrl, assertSameOrigin, createPublicTokenPayload, decryptSecret, normalizeContentUrl, normalizeUrl, sanitizeOptionalText, sanitizeText } from "@/lib/security";
+import { appUrl, assertSameOrigin, createPublicTokenPayload, decryptSecret, normalizeAssetOrUrl, normalizeContentUrl, sanitizeOptionalText, sanitizeText } from "@/lib/security";
 import { slugify } from "@/lib/utils";
 import { moduleBulkCreateSchema, moduleCreateSchema } from "@/lib/validations";
 
@@ -155,7 +155,8 @@ export async function GET() {
         updatedAt: module.updatedAt,
         createdAt: module.createdAt,
         slidesCount: module._count.slides,
-        publicUrl: publicUrlFromEncrypted(module.publicTokenEncrypted, module.publicTokenIv)
+        publicUrl: publicUrlFromEncrypted(module.publicTokenEncrypted, module.publicTokenIv),
+        publicPath: `/play/${decryptSecret(module.publicTokenEncrypted, module.publicTokenIv)}`
       }))
     });
   } catch (error) {
@@ -192,7 +193,7 @@ export async function POST(request: Request) {
           defaultDuration: data.defaultDuration,
           defaultTransition: data.defaultTransition,
           theme: sanitizeText(data.theme, 40),
-          logoUrl: data.logoUrl ? normalizeUrl(data.logoUrl) : null,
+          logoUrl: data.logoUrl ? normalizeAssetOrUrl(data.logoUrl) : null,
           createdById: user.id
         }
       });
@@ -220,7 +221,7 @@ export async function POST(request: Request) {
         defaultDuration: data.defaultDuration,
         defaultTransition: data.defaultTransition,
         theme: sanitizeText(data.theme, 40),
-        logoUrl: data.logoUrl ? normalizeUrl(data.logoUrl) : null,
+        logoUrl: data.logoUrl ? normalizeAssetOrUrl(data.logoUrl) : null,
         createdById: user.id,
         slides: {
           create: pendingSlides.map((slide) => ({

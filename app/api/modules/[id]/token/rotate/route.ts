@@ -29,7 +29,7 @@ export async function POST(request: Request, ctx: Ctx) {
     await auditLog({ licenseId: user.licenseId, userId: user.id, action: "ROTATE_PUBLIC_TOKEN", entity: "SlideModule", entityId: id, request });
     await securityEvent({ licenseId: user.licenseId, userId: user.id, eventType: "PUBLIC_TOKEN_ROTATED", request });
 
-    return json({ ok: true, publicUrl: `${appUrl()}/play/${token.token}` });
+    return json({ ok: true, publicUrl: `${appUrl()}/play/${token.token}`, publicPath: `/play/${token.token}` });
   } catch (error) {
     return handleApiError(error);
   }

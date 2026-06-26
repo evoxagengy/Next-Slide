@@ -27,7 +27,7 @@ export function ModuleCreateModal() {
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.25em] text-cyan">Novo módulo</div>
                 <h2 className="text-xl font-black text-text">Criar apresentação para TV</h2>
-                <p className="text-sm text-muted">Preencha as informações, envie arquivos e crie o player em um único fluxo.</p>
+                <p className="text-sm text-muted">Tudo em um modal: arquivos, sites, tempo, transição e logo.</p>
               </div>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)} aria-label="Fechar modal"><X size={20} /></Button>
             </div>

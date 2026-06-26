@@ -139,7 +139,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
 function SlideRenderer({ slide, iframeKey, iframeError, onIframeError }: { slide: PlayerSlide; iframeKey: number; iframeError: boolean; onIframeError: () => void }) {
   if (slide.type === "TEXT") return <TextSlide slide={slide} />;
   if (slide.type === "IMAGE" && slide.contentUrl) {
-    return <img src={slide.contentUrl} alt={slide.title || "Slide"} className={`h-full w-full ${slide.fit === "CONTAIN" ? "object-contain" : "object-cover"}`} onError={onIframeError} />;
+    return <img src={slide.contentUrl} alt={slide.title || "Imagem do módulo"} className="h-full w-full object-cover" onError={onIframeError} />;
   }
   if (slide.type === "POWERPOINT" && slide.contentUrl) {
     if (slide.openMode === "NEW_TAB" || iframeError) return <EmbedFallback url={slide.contentUrl} title={slide.title} powerPoint />;
@@ -191,7 +191,7 @@ function EmbedFallback({ url, title, powerPoint = false }: { url: string; title:
         <h1 className="mt-6 text-4xl font-black">{title || (powerPoint ? "PowerPoint" : "Conteúdo externo")}</h1>
         <p className="mt-4 text-lg leading-8 text-muted">
           {powerPoint
-            ? "Este PowerPoint precisa estar em uma URL pública compatível com visualização online. Revise o compartilhamento do arquivo ou abra o conteúdo em nova guia."
+            ? "Este PowerPoint não pôde ser incorporado pelo visualizador online. Use PDF/imagem para máxima compatibilidade ou abra o conteúdo em nova guia."
             : "Este conteúdo não permite incorporação ou foi configurado para abrir fora do iframe. Use um link compatível com embed ou abra em nova guia."}
         </p>
         <a href={absoluteUrl(url)} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-cyan px-6 py-3 font-bold text-white"><ExternalLink size={18} /> Abrir conteúdo</a>

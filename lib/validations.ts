@@ -10,6 +10,7 @@ const passwordSchema = z.string().min(8).superRefine((value, ctx) => {
 });
 
 const optionalUrlSchema = z.string().url("Informe uma URL valida.").optional().or(z.literal("")).nullable();
+const optionalAssetOrUrlSchema = z.string().optional().or(z.literal("")).nullable().refine((value) => !value || value.startsWith("/api/assets/") || /^https?:\/\//i.test(value), "Informe uma URL válida ou envie um arquivo.");
 const optionalContentUrlSchema = z.string().optional().or(z.literal("")).nullable().refine((value) => !value || value.startsWith("/api/assets/") || /^https?:\/\//i.test(value), "Informe uma URL válida ou arquivo enviado.");
 const durationSchema = z.coerce.number().int().min(3).max(3600);
 const transitionSchema = z.enum(["fade", "cut"]).default("fade");
@@ -32,7 +33,7 @@ export const moduleCreateSchema = z.object({
   defaultDuration: durationSchema.default(15),
   defaultTransition: transitionSchema,
   theme: z.string().max(40).default("next-dark"),
-  logoUrl: optionalUrlSchema
+  logoUrl: optionalAssetOrUrlSchema
 });
 
 const moduleBulkItemSchema = z.object({
