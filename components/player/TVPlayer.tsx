@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, ExternalLink, Presentation, MonitorX, RefreshCcw } from "lucide-react";
+import { ExternalLink, Presentation, MonitorX, RefreshCcw } from "lucide-react";
 
 type PlayerSlide = {
   id: string;
@@ -60,6 +60,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
   const [iframeError, setIframeError] = useState(false);
   const [iframeReloadKey, setIframeReloadKey] = useState(0);
   const [embedDecision, setEmbedDecision] = useState<EmbedDecision>(DEFAULT_EMBED_DECISION);
+  const embedDecisionCacheRef = useRef<Record<string, EmbedDecision>>({});
   const [remainingSeconds, setRemainingSeconds] = useState(15);
 
   const load = useCallback(async () => {
@@ -138,6 +139,14 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
       return;
     }
 
+    const cacheKey = `${currentSlide.id}:${checkUrl}`;
+    const cachedDecision = embedDecisionCacheRef.current[cacheKey];
+
+    if (cachedDecision) {
+      setEmbedDecision(cachedDecision);
+      return;
+    }
+
     const controller = new AbortController();
     setEmbedDecision({ checking: true, blocked: false, reason: null });
 
@@ -147,15 +156,19 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     })
       .then((response) => response.json())
       .then((data: { blocked?: boolean; reason?: string | null }) => {
-        setEmbedDecision({
+        const decision = {
           checking: false,
           blocked: Boolean(data.blocked),
           reason: data.reason || null
-        });
+        };
+        embedDecisionCacheRef.current[cacheKey] = decision;
+        setEmbedDecision(decision);
       })
       .catch(() => {
         if (!controller.signal.aborted) {
-          setEmbedDecision({ checking: false, blocked: false, reason: null });
+          const decision = { checking: false, blocked: false, reason: null };
+          embedDecisionCacheRef.current[cacheKey] = decision;
+          setEmbedDecision(decision);
         }
       });
 
@@ -199,20 +212,20 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
           )}
         </motion.section>
       </AnimatePresence>
-      <div className="pointer-events-none absolute bottom-6 left-6 right-6 z-20 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/30 px-5 py-3 backdrop-blur-xl">
-        <div className="flex min-w-0 items-center gap-3">
-          {state.module.logoUrl ? <img src={state.module.logoUrl} alt="Logo" className="h-8 max-w-32 object-contain" /> : <div className="h-3 w-3 rounded-full bg-cyan shadow-glow" />}
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{state.module.name}</div>
-            <div className="text-xs text-muted">{state.company.name}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 text-sm text-muted">
-          <span>{index + 1}/{state.slides.length}</span>
-          <span className="hidden items-center gap-2 sm:flex"><Clock size={16} /> {clock.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-        </div>
-      </div>
+      <ClockOverlay clock={clock} />
     </main>
+  );
+}
+
+function ClockOverlay({ clock }: { clock: Date }) {
+  const time = clock.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const date = clock.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  return (
+    <div className="pointer-events-none absolute right-4 top-4 z-20 rounded-2xl border border-white/10 bg-black/25 px-4 py-2 text-right text-white shadow-lg backdrop-blur-md">
+      <div className="font-mono text-3xl font-black leading-none tracking-wider drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] md:text-4xl">{time}</div>
+      <div className="mt-1 font-mono text-xs font-semibold tracking-[0.22em] text-white/65 md:text-sm">{date}</div>
+    </div>
   );
 }
 
@@ -254,7 +267,6 @@ function SlideRenderer({
       return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "Sistema próprio"} src={embedUrl || toProxyUrl(slide.contentUrl, publicToken)} className="h-full w-full border-0 bg-white" sandbox="allow-scripts allow-forms allow-popups allow-downloads allow-top-navigation-by-user-activation" referrerPolicy="no-referrer" onError={onIframeError} />;
     }
 
-    if (embedDecision.checking) return <StatusScreen title="Validando incorporação" description="Verificando se este site permite exibição dentro do player." />;
     if (slide.openMode === "NEW_TAB" || iframeError || embedDecision.blocked) {
       return <EmbedFallback url={slide.contentUrl} title={slide.title} reason={embedDecision.reason || (iframeError ? "O site recusou a conexão dentro do iframe." : "Este link está configurado como externo.")} remainingSeconds={remainingSeconds} manualMode={slide.openMode === "NEW_TAB"} />;
     }
