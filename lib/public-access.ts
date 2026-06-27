@@ -20,8 +20,11 @@ function matchesAssetPath(value: string | null | undefined, assetId: string) {
 export async function canAccessAssetWithPublicToken(assetId: string, licenseId: string, publicToken: string) {
   const module = await prisma.slideModule.findUnique({
     where: { publicTokenHash: sha256(publicToken) },
-    include: {
-      license: true,
+    select: {
+      licenseId: true,
+      isActive: true,
+      logoUrl: true,
+      license: { select: { status: true, expiresAt: true } },
       slides: {
         where: { isActive: true },
         select: { contentUrl: true }
@@ -41,8 +44,9 @@ export async function isPublicTokenAllowedForExternalSlide(input: {
 }) {
   const module = await prisma.slideModule.findUnique({
     where: { publicTokenHash: sha256(input.publicToken) },
-    include: {
-      license: true,
+    select: {
+      isActive: true,
+      license: { select: { status: true, expiresAt: true } },
       slides: {
         where: {
           isActive: true,

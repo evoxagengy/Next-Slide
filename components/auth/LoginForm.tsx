@@ -25,7 +25,7 @@ export function LoginForm() {
       })
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({ error: "Falha no login." }));
     setLoading(false);
 
     if (!response.ok) {
@@ -33,8 +33,7 @@ export function LoginForm() {
       return;
     }
 
-    router.push(params.get("next") || data.redirectTo || "/dashboard");
-    router.refresh();
+    router.replace(params.get("next") || data.redirectTo || "/dashboard");
   }
 
   return (

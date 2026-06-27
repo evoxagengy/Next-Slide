@@ -47,11 +47,40 @@ function withPublicToken(url: string | null, publicToken: string) {
 export async function getPlayerModule(publicToken: string): Promise<PlayerModuleState> {
   const module = await prisma.slideModule.findUnique({
     where: { publicTokenHash: sha256(publicToken) },
-    include: {
-      license: true,
+    select: {
+      id: true,
+      licenseId: true,
+      name: true,
+      description: true,
+      theme: true,
+      defaultDuration: true,
+      defaultTransition: true,
+      logoUrl: true,
+      showClock: true,
+      isActive: true,
+      license: {
+        select: {
+          companyName: true,
+          status: true,
+          expiresAt: true
+        }
+      },
       slides: {
         where: { isActive: true },
-        orderBy: { sortOrder: "asc" }
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          description: true,
+          contentUrl: true,
+          textContent: true,
+          duration: true,
+          fit: true,
+          backgroundColor: true,
+          refreshInterval: true,
+          openMode: true
+        }
       }
     }
   });

@@ -99,6 +99,7 @@ model User {
   mediaAssets    MediaAsset[]
 
   @@index([licenseId])
+  @@index([licenseId, isActive])
   @@index([role])
 }
 
@@ -144,6 +145,8 @@ model SlideModule {
 
   @@unique([licenseId, slug])
   @@index([licenseId])
+  @@index([licenseId, isActive])
+  @@index([licenseId, updatedAt])
   @@index([isActive])
 }
 
@@ -168,6 +171,7 @@ model Slide {
   module SlideModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 
   @@index([moduleId])
+  @@index([moduleId, isActive, sortOrder])
   @@index([sortOrder])
 }
 
@@ -215,6 +219,7 @@ model DeviceSession {
 
   @@unique([moduleId, deviceKey])
   @@index([licenseId])
+  @@index([licenseId, lastSeenAt])
   @@index([moduleId])
   @@index([lastSeenAt])
 }

@@ -10,10 +10,25 @@ import { decryptSecret } from "@/lib/security";
 
 export default async function ModulesPage() {
   const user = await requireUser();
+
   const modules = await prisma.slideModule.findMany({
     where: { licenseId: user.licenseId },
-    include: {
-      slides: { orderBy: { sortOrder: "asc" } },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      slug: true,
+      isActive: true,
+      defaultDuration: true,
+      defaultTransition: true,
+      theme: true,
+      logoUrl: true,
+      showClock: true,
+      updatedAt: true,
+      createdAt: true,
+      lastTokenRotatedAt: true,
+      publicTokenEncrypted: true,
+      publicTokenIv: true,
       _count: { select: { slides: true } }
     },
     orderBy: { updatedAt: "desc" }
@@ -37,21 +52,7 @@ export default async function ModulesPage() {
       lastTokenRotatedAt: module.lastTokenRotatedAt.toISOString(),
       slidesCount: module._count.slides,
       publicPath: `/play/${token}`,
-      slides: module.slides.map((slide) => ({
-        id: slide.id,
-        type: slide.type,
-        title: slide.title,
-        description: slide.description,
-        contentUrl: slide.contentUrl,
-        textContent: slide.textContent,
-        duration: slide.duration,
-        sortOrder: slide.sortOrder,
-        isActive: slide.isActive,
-        fit: slide.fit,
-        backgroundColor: slide.backgroundColor,
-        refreshInterval: slide.refreshInterval,
-        openMode: slide.openMode
-      }))
+      slides: []
     };
   });
 

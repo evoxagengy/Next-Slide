@@ -101,6 +101,7 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
   const [uploadingImages, setUploadingImages] = useState(false);
   const [convertingPptx, setConvertingPptx] = useState(false);
   const [deletingMedia, setDeletingMedia] = useState(false);
+  const [loadingSlides, setLoadingSlides] = useState(false);
   const [error, setError] = useState("");
   const [name, setName] = useState(module.name);
   const [description, setDescription] = useState(module.description || "");
@@ -127,6 +128,42 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
   }, [open]);
+
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    setLoadingSlides(true);
+    setError("");
+
+    fetch(`/api/modules/${module.id}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (!data?.module) throw new Error(data?.error || "Não foi possível carregar os slides do módulo.");
+        const loaded = data.module;
+        setName(loaded.name || module.name);
+        setDescription(loaded.description || "");
+        setIsActive(Boolean(loaded.isActive));
+        setDefaultDuration(String(loaded.defaultDuration || module.defaultDuration));
+        setTransition(loaded.defaultTransition === "cut" ? "cut" : "fade");
+        setShowClock(Boolean(loaded.showClock));
+        setLogoUrl(loaded.logoUrl || "");
+        setLogoPreview(loaded.logoUrl || "");
+        setSlides((loaded.slides || []).map((slide: EditableSlide) => ({ ...slide, saving: false })));
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Erro ao carregar slides do módulo.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSlides(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, module.id]);
 
   async function chooseLogo(file: File | undefined) {
     if (!file) return;
@@ -360,7 +397,7 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
     }
   }
 
-  const busy = saving || orderSaving || uploadingImages || convertingPptx || deletingMedia;
+  const busy = saving || orderSaving || uploadingImages || convertingPptx || deletingMedia || loadingSlides;
 
   const modal = open ? (
     <div
@@ -431,6 +468,7 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
                   {uploadingImages && <Badge tone="info">Enviando imagens...</Badge>}
                   {convertingPptx && <Badge tone="info">Convertendo PPTX...</Badge>}
                   {deletingMedia && <Badge tone="warning">Apagando imagens...</Badge>}
+                  {loadingSlides && <Badge tone="info">Carregando slides...</Badge>}
                 </div>
               </div>
 
@@ -451,6 +489,9 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
               </div>
             </div>
 
+            {loadingSlides ? (
+              <div className="p-8 text-center text-sm font-semibold text-cyan">Carregando slides deste módulo...</div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1020px] text-sm">
                 <thead className="bg-white/[0.04] text-left text-xs uppercase tracking-[0.16em] text-muted">
@@ -545,8 +586,9 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
                 </tbody>
               </table>
             </div>
+            )}
 
-            {slides.length === 0 && <div className="p-6 text-center text-sm text-muted">Este módulo ainda não possui slides.</div>}
+            {!loadingSlides && slides.length === 0 && <div className="p-6 text-center text-sm text-muted">Este módulo ainda não possui slides.</div>}
           </Card>
 
           {error && <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-red-200">{error}</div>}

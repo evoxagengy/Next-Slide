@@ -1,10 +1,9 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LicenseStatus, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getClientIp, getUserAgent, randomToken, SESSION_COOKIE, sha256 } from "@/lib/security";
-
-export type AuthUser = Awaited<ReturnType<typeof getCurrentUser>>;
 
 const SESSION_DAYS = 7;
 
@@ -13,16 +12,38 @@ export async function getSessionToken() {
   return cookieStore.get(SESSION_COOKIE)?.value || null;
 }
 
-export async function getCurrentUser() {
-  const rawToken = await getSessionToken();
-  if (!rawToken) return null;
-
+async function readCurrentUserByToken(rawToken: string) {
   const session = await prisma.session.findUnique({
     where: { tokenHash: sha256(rawToken) },
-    include: {
+    select: {
+      id: true,
+      expiresAt: true,
       user: {
-        include: {
-          license: true
+        select: {
+          id: true,
+          licenseId: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          license: {
+            select: {
+              id: true,
+              companyName: true,
+              plan: true,
+              status: true,
+              maxUsers: true,
+              maxModules: true,
+              maxSlidesPerModule: true,
+              startsAt: true,
+              expiresAt: true,
+              createdAt: true,
+              updatedAt: true
+            }
+          }
         }
       }
     }
@@ -38,6 +59,16 @@ export async function getCurrentUser() {
 
   return session.user;
 }
+
+const getCurrentUserByToken = cache(readCurrentUserByToken);
+
+export async function getCurrentUser() {
+  const rawToken = await getSessionToken();
+  if (!rawToken) return null;
+  return getCurrentUserByToken(rawToken);
+}
+
+export type AuthUser = Awaited<ReturnType<typeof getCurrentUser>>;
 
 export async function requireUser() {
   const user = await getCurrentUser();
@@ -60,6 +91,7 @@ export async function requireApiRole(roles: UserRole[]) {
 export async function createSession(userId: string, request: Request) {
   const token = randomToken(48);
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+
   await prisma.session.create({
     data: {
       userId,
@@ -85,6 +117,7 @@ export async function destroyCurrentSession() {
   if (token) {
     await prisma.session.deleteMany({ where: { tokenHash: sha256(token) } });
   }
+
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, "", {
     httpOnly: true,

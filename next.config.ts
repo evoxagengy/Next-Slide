@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "framer-motion"]
+  },
   eslint: {
     ignoreDuringBuilds: true
   },
@@ -15,6 +18,13 @@ const nextConfig: NextConfig = {
     ];
 
     return [
+      {
+        source: "/brand/:path*",
+        headers: [
+          ...baseHeaders,
+          { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }
+        ]
+      },
       {
         source: "/:path*",
         headers: baseHeaders

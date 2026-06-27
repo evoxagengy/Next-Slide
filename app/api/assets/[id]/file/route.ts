@@ -26,7 +26,18 @@ export async function GET(request: Request, ctx: Ctx) {
   }
 
   const { id } = await ctx.params;
-  const asset = await prisma.mediaAsset.findUnique({ where: { id } });
+  const asset = await prisma.mediaAsset.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      licenseId: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      dataBase64: true,
+      createdAt: true
+    }
+  });
 
   if (!asset) return unauthorizedAssetResponse();
 
@@ -39,6 +50,21 @@ export async function GET(request: Request, ctx: Ctx) {
 
   if (!allowedBySession && !allowedByPublicToken) return unauthorizedAssetResponse();
 
+  const etag = `W/"asset-${asset.id}-${asset.sizeBytes}-${asset.createdAt.getTime()}"`;
+  const requestEtag = request.headers.get("if-none-match");
+  const cacheControl = publicToken ? "public, max-age=86400, stale-while-revalidate=604800" : "private, max-age=3600";
+
+  if (requestEtag === etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: {
+        "Cache-Control": cacheControl,
+        "ETag": etag,
+        "X-Content-Type-Options": "nosniff"
+      }
+    });
+  }
+
   const buffer = Buffer.from(asset.dataBase64, "base64");
   const crossOriginPolicy = asset.mimeType.includes("powerpoint") || asset.mimeType.includes("presentation") ? "cross-origin" : "same-origin";
 
@@ -48,7 +74,8 @@ export async function GET(request: Request, ctx: Ctx) {
       "Content-Type": asset.mimeType,
       "Content-Length": String(buffer.byteLength),
       "Content-Disposition": contentDisposition(asset.fileName),
-      "Cache-Control": "private, no-store, max-age=0",
+      "Cache-Control": cacheControl,
+      "ETag": etag,
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
       "Cross-Origin-Resource-Policy": crossOriginPolicy

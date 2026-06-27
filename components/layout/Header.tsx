@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/layout/Brand";
 
@@ -9,8 +9,7 @@ export function Header({ name, company, role }: { name: string; company: string;
   const router = useRouter();
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    router.replace("/login");
   }
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/75 px-4 py-4 backdrop-blur-xl lg:px-8">

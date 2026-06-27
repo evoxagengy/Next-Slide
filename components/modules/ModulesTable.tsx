@@ -1,12 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { CopyPlus, ExternalLink, Pencil, RefreshCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/modules/CopyButton";
-import { ModuleEditModal } from "@/components/modules/ModuleEditModal";
 
 export type ModuleSlideRow = {
   id: string;
@@ -42,6 +42,15 @@ export type ModuleRow = {
   publicPath: string;
   slides: ModuleSlideRow[];
 };
+
+
+const ModuleEditModal = dynamic(
+  () => import("@/components/modules/ModuleEditModal").then((mod) => mod.ModuleEditModal),
+  {
+    ssr: false,
+    loading: () => <Button type="button" variant="secondary" size="sm"><Pencil size={15} /> Editar</Button>
+  }
+);
 
 function formatDate(value: string) {
   try {
