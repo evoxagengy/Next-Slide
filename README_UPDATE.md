@@ -1,8 +1,20 @@
-# Next Slide - Hotfix showClock validation v1
+# Next Slide — Hotfix Manager Duplicate Prop v1
 
-Correção de build TypeScript: `showClock` foi adicionado ao schema `moduleCreateSchema`, permitindo que `moduleUpdateSchema.partial()` aceite `data.showClock` na rota `app/api/modules/[id]/route.ts`.
+## Objetivo
+Corrigir falha de build TypeScript em `components/users/ManagerClient.tsx`.
 
-Arquivos alterados:
-- lib/validations.ts
+## Problema
+O TypeScript acusava que `companyName` poderia ser sobrescrito porque o objeto de edição da empresa declarava propriedades explícitas e depois espalhava `...current[id]`.
 
-Sem alteração de banco, Prisma, API pública ou variáveis de ambiente.
+## Correção
+A função `setCompanyEdit` agora monta um objeto `base` primeiro e depois aplica somente o patch alterado, eliminando a duplicidade de propriedades.
+
+## Arquivos alterados
+- `components/users/ManagerClient.tsx`
+
+## Banco
+Não altera banco.
+
+## Teste esperado
+O build deve passar do erro:
+`companyName is specified more than once`

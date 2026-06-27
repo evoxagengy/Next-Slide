@@ -251,17 +251,23 @@ export function ManagerClient({ initialCompanies, currentLicenseId, canManageAll
   function setCompanyEdit(id: string, patch: Partial<EditingCompany>) {
     const company = companies.find((item) => item.id === id);
     if (!company) return;
-    setEditingCompanies((current) => ({
-      ...current,
-      [id]: {
+
+    setEditingCompanies((current) => {
+      const base: EditingCompany = current[id] ?? {
         companyName: company.companyName,
         plan: normalizeEditablePlan(company.plan),
         status: company.status,
-        maxUsers: company.maxUsers,
-        ...current[id],
-        ...patch
-      }
-    }));
+        maxUsers: company.maxUsers
+      };
+
+      return {
+        ...current,
+        [id]: {
+          ...base,
+          ...patch
+        }
+      };
+    });
   }
 
   return (
