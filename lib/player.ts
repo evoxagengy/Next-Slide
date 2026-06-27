@@ -35,6 +35,14 @@ export type PlayerModuleState =
       }>;
     };
 
+
+function withPublicToken(url: string | null, publicToken: string) {
+  if (!url) return null;
+  if (!url.startsWith("/api/assets/")) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}token=${encodeURIComponent(publicToken)}`;
+}
+
 export async function getPlayerModule(publicToken: string): Promise<PlayerModuleState> {
   const module = await prisma.slideModule.findUnique({
     where: { publicTokenHash: sha256(publicToken) },
@@ -65,7 +73,7 @@ export async function getPlayerModule(publicToken: string): Promise<PlayerModule
       theme: module.theme,
       defaultDuration: module.defaultDuration,
       defaultTransition: module.defaultTransition,
-      logoUrl: module.logoUrl
+      logoUrl: withPublicToken(module.logoUrl, publicToken)
     },
     company: { name: module.license.companyName },
     slides: module.slides.map((slide) => ({
@@ -73,7 +81,7 @@ export async function getPlayerModule(publicToken: string): Promise<PlayerModule
       type: slide.type,
       title: slide.title,
       description: slide.description,
-      contentUrl: slide.contentUrl,
+      contentUrl: withPublicToken(slide.contentUrl, publicToken),
       textContent: slide.textContent,
       duration: slide.duration,
       fit: slide.fit,

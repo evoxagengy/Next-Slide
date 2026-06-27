@@ -92,10 +92,10 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     if (!currentSlide?.contentUrl) return null;
     if (currentSlide.type === "POWERPOINT") return toPowerPointEmbedUrl(currentSlide.contentUrl);
     if ((currentSlide.type === "URL" || currentSlide.type === "DASHBOARD") && currentSlide.openMode === "PROXY") {
-      return toProxyUrl(currentSlide.contentUrl);
+      return toProxyUrl(currentSlide.contentUrl, publicToken);
     }
     return currentSlide.contentUrl;
-  }, [currentSlide]);
+  }, [currentSlide, publicToken]);
 
   useEffect(() => {
     if (state.status !== "ready" || state.slides.length === 0) return;
@@ -141,7 +141,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     const controller = new AbortController();
     setEmbedDecision({ checking: true, blocked: false, reason: null });
 
-    fetch(`/api/embed-check?url=${encodeURIComponent(checkUrl)}`, {
+    fetch(`/api/embed-check?url=${encodeURIComponent(checkUrl)}&token=${encodeURIComponent(publicToken)}`, {
       cache: "no-store",
       signal: controller.signal
     })
@@ -160,7 +160,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
       });
 
     return () => controller.abort();
-  }, [currentSlide?.id, currentSlide?.contentUrl, currentSlide?.openMode, currentSlide?.type]);
+  }, [currentSlide?.id, currentSlide?.contentUrl, currentSlide?.openMode, currentSlide?.type, publicToken]);
 
   if (state.status === "loading") return <StatusScreen title="Carregando Next Slide" description="Preparando player em tela cheia." />;
   if (state.status === "invalid") return <StatusScreen icon="error" title="Link inválido" description="Token não encontrado ou link regenerado pelo administrador." />;
@@ -194,6 +194,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
               embedUrl={currentEmbedUrl}
               onIframeError={() => setIframeError(true)}
               remainingSeconds={remainingSeconds}
+              publicToken={publicToken}
             />
           )}
         </motion.section>
@@ -222,7 +223,8 @@ function SlideRenderer({
   embedDecision,
   embedUrl,
   onIframeError,
-  remainingSeconds
+  remainingSeconds,
+  publicToken
 }: {
   slide: PlayerSlide;
   iframeKey: number;
@@ -231,6 +233,7 @@ function SlideRenderer({
   embedUrl: string | null;
   onIframeError: () => void;
   remainingSeconds: number;
+  publicToken: string;
 }) {
   if (slide.type === "TEXT") return <TextSlide slide={slide} />;
 
@@ -248,7 +251,7 @@ function SlideRenderer({
       if (iframeError) {
         return <EmbedFallback url={slide.contentUrl} title={slide.title} reason="O proxy do Next Slide não conseguiu renderizar este sistema. Verifique se o domínio está liberado em NEXT_SLIDE_PROXY_ALLOWED_HOSTS ou use link de embed/publicação." remainingSeconds={remainingSeconds} proxyMode />;
       }
-      return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "Sistema próprio"} src={embedUrl || toProxyUrl(slide.contentUrl)} className="h-full w-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads allow-top-navigation-by-user-activation" onError={onIframeError} />;
+      return <iframe key={`${slide.id}-${iframeKey}`} title={slide.title || "Sistema próprio"} src={embedUrl || toProxyUrl(slide.contentUrl, publicToken)} className="h-full w-full border-0 bg-white" sandbox="allow-scripts allow-forms allow-popups allow-downloads allow-top-navigation-by-user-activation" referrerPolicy="no-referrer" onError={onIframeError} />;
     }
 
     if (embedDecision.checking) return <StatusScreen title="Validando incorporação" description="Verificando se este site permite exibição dentro do player." />;
@@ -266,9 +269,9 @@ function absoluteUrl(url: string) {
   return new URL(url, window.location.origin).toString();
 }
 
-function toProxyUrl(url: string) {
+function toProxyUrl(url: string, publicToken: string) {
   const absolute = absoluteUrl(url);
-  return `/api/proxy/page?url=${encodeURIComponent(absolute)}`;
+  return `/api/proxy/page?url=${encodeURIComponent(absolute)}&token=${encodeURIComponent(publicToken)}`;
 }
 
 function toPowerPointEmbedUrl(url: string) {

@@ -21,30 +21,34 @@ function adminCsp() {
 
 function playerCsp() {
   return [
-    "default-src 'self' https: http: data: blob:",
+    "default-src 'self' https: data: blob:",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https: http:",
+    "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https: http:",
-    "frame-src https: http: data: blob:",
+    "connect-src 'self' https:",
+    "frame-src 'self' https: data: blob:",
+    "media-src 'self' https: data: blob:",
     "frame-ancestors 'self'",
-    "base-uri 'self'"
+    "base-uri 'self'",
+    "form-action 'self'"
   ].join("; ");
 }
 
 function proxyCsp() {
   return [
-    "default-src 'self' https: http: data: blob:",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:",
-    "style-src 'self' 'unsafe-inline' https: http:",
-    "img-src 'self' data: blob: https: http:",
-    "font-src 'self' data: https: http:",
-    "connect-src 'self' https: http:",
-    "frame-src 'self' https: http: data: blob:",
+    "default-src 'none'",
+    "script-src https: 'unsafe-inline' 'unsafe-eval'",
+    "style-src https: 'unsafe-inline'",
+    "img-src https: data: blob:",
+    "font-src https: data:",
+    "connect-src https:",
+    "frame-src https: data: blob:",
+    "media-src https: data: blob:",
+    "object-src 'none'",
     "frame-ancestors 'self'",
-    "base-uri https: http:",
-    "form-action 'self' https: http:"
+    "base-uri 'none'",
+    "form-action 'none'"
   ].join("; ");
 }
 
@@ -68,6 +72,10 @@ export function middleware(request: NextRequest) {
   const isPlayerRoute = pathname.startsWith("/play");
   const isProxyRoute = pathname.startsWith("/api/proxy");
   response.headers.set("Content-Security-Policy", isProxyRoute ? proxyCsp() : isPlayerRoute ? playerCsp() : adminCsp());
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", isProxyRoute ? "no-referrer" : "strict-origin-when-cross-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+
   if (!isPlayerRoute && !isProxyRoute) {
     response.headers.set("X-Frame-Options", "DENY");
   }

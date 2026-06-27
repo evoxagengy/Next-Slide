@@ -1,4 +1,8 @@
+import { SlideOpenMode } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { assertPublicDnsResolution, parsePublicHttpsUrl } from "@/lib/network-security";
+import { isPublicTokenAllowedForExternalSlide } from "@/lib/public-access";
+import { assertBasicRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,17 +41,20 @@ function buildSecurityHeaders(contentType = "text/html; charset=utf-8") {
     "Cache-Control": "no-store, no-cache, must-revalidate",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Resource-Policy": "same-origin",
     "Content-Security-Policy": [
-      "default-src 'self' https: http: data: blob:",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:",
-      "style-src 'self' 'unsafe-inline' https: http:",
-      "img-src 'self' data: blob: https: http:",
-      "font-src 'self' data: https: http:",
-      "connect-src 'self' https: http:",
-      "frame-src 'self' https: http: data: blob:",
-      "frame-ancestors 'self'",
-      "base-uri https: http:",
-      "form-action 'self' https: http:"
+      "default-src 'none'",
+      "script-src https: 'unsafe-inline' 'unsafe-eval'",
+      "style-src https: 'unsafe-inline'",
+      "img-src https: data: blob:",
+      "font-src https: data:",
+      "connect-src https:",
+      "frame-src https: data: blob:",
+      "media-src https: data: blob:",
+      "object-src 'none'",
+      "base-uri 'none'",
+      "form-action 'none'",
+      "frame-ancestors 'self'"
     ].join("; ")
   };
 }
@@ -64,9 +71,11 @@ function rewriteHtml(html: string, target: URL) {
 
   output = output.replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
   output = output.replace(/<meta[^>]+http-equiv=["']?x-frame-options["']?[^>]*>/gi, "");
+  output = output.replace(/<meta[^>]+http-equiv=["']?refresh["']?[^>]*>/gi, "");
 
   const origin = target.origin;
-  output = output.replace(/\b(src|href|action)=(["'])\/(?!\/)/gi, (_match, attr: string, quote: string) => `${attr}=${quote}${origin}/`);
+  output = output.replace(/\b(src|href)=(['"])\/(?!\/)/gi, (_match, attr: string, quote: string) => `${attr}=${quote}${origin}/`);
+  output = output.replace(/\baction=(['"])[^'"]*\1/gi, "action=\"#\"");
   output = output.replace(/\bsrcset=(["'])([^"']+)\1/gi, (_match, quote: string, srcset: string) => {
     const rewritten = srcset
       .split(",")
@@ -82,38 +91,78 @@ function rewriteHtml(html: string, target: URL) {
   return output;
 }
 
+
+async function fetchAllowedPublicUrl(initialTarget: URL) {
+  let current = initialTarget;
+
+  for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
+    if (!isAllowedHost(current.hostname)) {
+      throw new Error("PROXY_HOST_NOT_ALLOWED");
+    }
+
+    await assertPublicDnsResolution(current.hostname);
+
+    const response = await fetch(current.toString(), {
+      redirect: "manual",
+      cache: "no-store",
+      headers: {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "NextSlideTVProxy/2.0"
+      }
+    });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+
+    const location = response.headers.get("location");
+    if (!location) return response;
+
+    current = parsePublicHttpsUrl(new URL(location, current).toString());
+  }
+
+  throw new Error("TOO_MANY_REDIRECTS");
+}
+
 function proxyError(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status, headers: buildSecurityHeaders("application/json; charset=utf-8") });
+  return NextResponse.json({ ok: false, error: message }, { status, headers: buildSecurityHeaders("application/json; charset=utf-8") });
 }
 
 export async function GET(request: NextRequest) {
+  try {
+    assertBasicRateLimit(request, "proxy_page", { max: 60, windowMs: 60_000 });
+  } catch {
+    return proxyError("Muitas requisições ao proxy. Aguarde alguns minutos.", 429);
+  }
+
   const rawUrl = request.nextUrl.searchParams.get("url");
+  const publicToken = request.nextUrl.searchParams.get("token");
   if (!rawUrl) return proxyError("URL não informada.");
+  if (!publicToken) return proxyError("Token público não informado.", 401);
 
   let target: URL;
   try {
-    target = new URL(rawUrl);
-  } catch {
-    return proxyError("URL inválida.");
-  }
-
-  if (target.protocol !== "https:" && target.protocol !== "http:") {
-    return proxyError("Somente URLs http ou https são permitidas.");
+    target = parsePublicHttpsUrl(rawUrl);
+  } catch (error) {
+    if (error instanceof Error && error.message === "HTTPS_REQUIRED") return proxyError("Somente URLs HTTPS são permitidas no proxy seguro.");
+    if (error instanceof Error && error.message === "PRIVATE_URL_NOT_ALLOWED") return proxyError("URL interna ou privada não pode ser carregada pelo proxy.");
+    return proxyError("URL inválida ou não permitida.");
   }
 
   if (!isAllowedHost(target.hostname)) {
     return proxyError(`Domínio não liberado para proxy: ${target.hostname}.`, 403);
   }
 
+  const allowedForToken = await isPublicTokenAllowedForExternalSlide({
+    publicToken,
+    url: target,
+    openModes: [SlideOpenMode.PROXY]
+  });
+
+  if (!allowedForToken) {
+    return proxyError("Este link não pertence a um slide proxy ativo deste player.", 403);
+  }
+
   try {
-    const upstream = await fetch(target.toString(), {
-      redirect: "follow",
-      cache: "no-store",
-      headers: {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "User-Agent": "NextSlideTVProxy/1.0"
-      }
-    });
+    const upstream = await fetchAllowedPublicUrl(target);
 
     const contentType = upstream.headers.get("content-type") || "text/html; charset=utf-8";
     const buffer = await upstream.arrayBuffer();

@@ -1,5 +1,10 @@
+import { SlideOpenMode } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { assertPublicDnsResolution, parsePublicHttpsUrl } from "@/lib/network-security";
+import { isPublicTokenAllowedForExternalSlide } from "@/lib/public-access";
+import { assertBasicRateLimit } from "@/lib/rate-limit";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type EmbedCheckResult = {
@@ -7,25 +12,6 @@ type EmbedCheckResult = {
   reason: string | null;
   status?: number;
 };
-
-const PRIVATE_HOST_PATTERNS = [
-  /^localhost$/i,
-  /^127\./,
-  /^10\./,
-  /^192\.168\./,
-  /^172\.(1[6-9]|2\d|3[0-1])\./,
-  /^0\./,
-  /^169\.254\./,
-  /^::1$/,
-  /^fc00:/i,
-  /^fd00:/i,
-  /^fe80:/i
-];
-
-function isBlockedHost(hostname: string) {
-  const normalized = hostname.trim().toLowerCase();
-  return PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(normalized));
-}
 
 function normalizeFrameAncestors(value: string) {
   const lower = value.toLowerCase();
@@ -52,10 +38,10 @@ function analyzeHeaders(headers: Headers, origin: string): EmbedCheckResult {
     }
 
     const allowsAny = frameAncestors.includes("*");
-    const allowsSelfOnly = frameAncestors.includes("'self'") && !frameAncestors.includes(origin.toLowerCase());
     const allowsThisOrigin = frameAncestors.includes(origin.toLowerCase());
+    const onlySelf = frameAncestors.includes("'self'") && !allowsThisOrigin;
 
-    if (!allowsAny && !allowsThisOrigin && allowsSelfOnly) {
+    if (!allowsAny && !allowsThisOrigin && onlySelf) {
       return { blocked: true, reason: "O site permite iframe apenas no próprio domínio." };
     }
   }
@@ -64,48 +50,75 @@ function analyzeHeaders(headers: Headers, origin: string): EmbedCheckResult {
 }
 
 async function requestHeaders(url: string, method: "HEAD" | "GET") {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
+  let current = parsePublicHttpsUrl(url);
 
-  try {
-    return await fetch(url, {
-      method,
-      redirect: "follow",
-      cache: "no-store",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "NextSlideEmbedCheck/1.0"
-      }
-    });
-  } finally {
-    clearTimeout(timeout);
+  for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
+    await assertPublicDnsResolution(current.hostname);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+
+    try {
+      const response = await fetch(current.toString(), {
+        method,
+        redirect: "manual",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "NextSlideEmbedCheck/2.0"
+        }
+      });
+
+      if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+
+      const location = response.headers.get("location");
+      if (!location) return response;
+      current = parsePublicHttpsUrl(new URL(location, current).toString());
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  throw new Error("TOO_MANY_REDIRECTS");
 }
 
 export async function GET(request: Request) {
+  try {
+    assertBasicRateLimit(request, "embed_check", { max: 120, windowMs: 60_000 });
+  } catch {
+    return NextResponse.json({ blocked: true, reason: "Muitas verificações em pouco tempo." }, { status: 429 });
+  }
+
   const { searchParams, origin } = new URL(request.url);
   const rawUrl = searchParams.get("url");
+  const publicToken = searchParams.get("token");
 
   if (!rawUrl) {
     return NextResponse.json({ blocked: true, reason: "URL não informada." }, { status: 400 });
   }
 
+  if (!publicToken) {
+    return NextResponse.json({ blocked: true, reason: "Token público não informado." }, { status: 401 });
+  }
+
   let parsed: URL;
   try {
-    parsed = new URL(rawUrl);
+    parsed = parsePublicHttpsUrl(rawUrl);
   } catch {
-    return NextResponse.json({ blocked: true, reason: "URL inválida." }, { status: 400 });
+    return NextResponse.json({ blocked: true, reason: "Use apenas URLs HTTPS públicas." }, { status: 400 });
   }
 
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    return NextResponse.json({ blocked: true, reason: "Use apenas URLs HTTP ou HTTPS." }, { status: 400 });
-  }
+  const allowedForToken = await isPublicTokenAllowedForExternalSlide({
+    publicToken,
+    url: parsed,
+    openModes: [SlideOpenMode.IFRAME]
+  });
 
-  if (isBlockedHost(parsed.hostname)) {
-    return NextResponse.json({ blocked: true, reason: "URL interna/privada não pode ser verificada pelo player público." }, { status: 400 });
+  if (!allowedForToken) {
+    return NextResponse.json({ blocked: true, reason: "Este link não pertence a um slide ativo deste player." }, { status: 403 });
   }
 
   try {
+    await assertPublicDnsResolution(parsed.hostname);
     let response = await requestHeaders(parsed.toString(), "HEAD");
 
     if (response.status === 405 || response.status === 403 || response.status === 404) {

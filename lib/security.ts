@@ -109,6 +109,9 @@ export function normalizeUrl(value: string) {
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error("URL deve começar com http:// ou https://.");
   }
+  if (url.protocol === "http:" && process.env.NODE_ENV === "production" && process.env.NEXT_SLIDE_ALLOW_HTTP_LINKS !== "true") {
+    throw new Error("URL deve usar HTTPS em produção.");
+  }
   return url.toString();
 }
 

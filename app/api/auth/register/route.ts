@@ -4,12 +4,14 @@ import { auditLog, securityEvent } from "@/lib/audit";
 import { createSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PLAN_LIMITS } from "@/lib/license";
+import { assertBasicRateLimit } from "@/lib/rate-limit";
 import { assertSameOrigin, hashPassword, sanitizeText } from "@/lib/security";
 import { registerSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
+    assertBasicRateLimit(request, "register", { max: 5, windowMs: 60_000 });
     const data = registerSchema.parse(await request.json());
 
     const existing = await prisma.user.findUnique({ where: { email: data.email } });
