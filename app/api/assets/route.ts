@@ -173,7 +173,10 @@ async function extractConvertedFilesFromZip(zipBuffer: Buffer) {
 async function convertPptxWithConvertApi(buffer: Buffer, originalName: string) {
   const secret = ensureConfiguredConvertApiSecret();
   const formData = new FormData();
-  formData.set("File", new Blob([buffer], { type: MIME_BY_EXTENSION.pptx }), originalName);
+  const fileBytes = new Uint8Array(buffer.byteLength);
+  fileBytes.set(buffer);
+  const fileBlob = new Blob([fileBytes.buffer], { type: MIME_BY_EXTENSION.pptx });
+  formData.set("File", fileBlob, originalName);
   formData.set("StoreFile", "true");
 
   const response = await fetch(`${CONVERTAPI_ENDPOINT}?Secret=${encodeURIComponent(secret)}`, {

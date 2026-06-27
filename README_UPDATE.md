@@ -1,35 +1,26 @@
-NEXT SLIDE — HOTFIX PPTX CONVERSION V4
+NEXT SLIDE — HOTFIX PPTX BLOB BUFFER V1
 
 OBJETIVO
-Substituir a conversão interna simplificada de PPTX por conversão fiel em PNG usando serviço externo (ConvertAPI), para que cada slide do PowerPoint seja convertido como imagem real, preservando layout, textos, fundo, personagem e elementos visuais.
+Corrigir erro de build TypeScript/Node 24 no envio do buffer PPTX para o Blob usado na integração ConvertAPI.
 
-ARQUIVOS INCLUÍDOS
+ERRO CORRIGIDO
+Type error: Type 'Buffer<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+
+CAUSA
+No Node 24 + TypeScript, Buffer pode carregar ArrayBufferLike/SharedArrayBuffer na tipagem e não é aceito diretamente como BlobPart.
+
+CORREÇÃO
+O Buffer agora é copiado para um Uint8Array criado com ArrayBuffer normal e só então usado no Blob.
+
+ARQUIVOS ALTERADOS
 - app/api/assets/route.ts
-- .env.example
-- README_UPDATE.md
 
-O QUE FOI AJUSTADO
-1. Removida a estratégia que tentava reconstruir o slide manualmente em SVG.
-2. Novo fluxo de conversão: PPTX -> PNG por serviço de conversão externo.
-3. Cada slide convertido vira uma imagem separada no sistema.
-4. Continua respeitando os planos: Basic sem PPTX; Premium/Enterprise com PPTX.
-5. Continua sem exigir alteração no banco Neon.
+BANCO
+- Não altera Prisma.
+- Não altera Neon.
+- Não precisa rodar SQL.
 
-IMPORTANTE
-Para funcionar corretamente, é necessário configurar a variável:
-- CONVERTAPI_SECRET
-
-E também:
-- PPTX_CONVERTER_PROVIDER="convertapi"
-
-SEM ISSO
-O sistema vai bloquear a conversão de PPTX com mensagem clara, ao invés de gerar imagem errada.
-
-COMO TESTAR
-1. Aplique os arquivos.
-2. Configure as envs na Vercel.
-3. Faça redeploy.
-4. Entre no sistema.
-5. Crie/edite um módulo.
-6. Envie o mesmo PPTX de teste.
-7. Confirme se cada slide virou uma imagem separada, na ordem correta.
+VALIDAÇÃO
+- Patch aplicado somente no trecho do Blob/FormData.
+- Conferido que o arquivo mantém o fluxo ConvertAPI.
+- Conferido que o ZIP não contém .env, .env.local, node_modules, .next, .vercel ou segredos.
