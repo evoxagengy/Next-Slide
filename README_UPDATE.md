@@ -1,26 +1,31 @@
-NEXT SLIDE — HOTFIX PPTX BLOB BUFFER V1
+NEXT SLIDE — UPDATE BRAND LOGO V1
 
 OBJETIVO
-Corrigir erro de build TypeScript/Node 24 no envio do buffer PPTX para o Blob usado na integração ConvertAPI.
-
-ERRO CORRIGIDO
-Type error: Type 'Buffer<ArrayBufferLike>' is not assignable to type 'BlobPart'.
-
-CAUSA
-No Node 24 + TypeScript, Buffer pode carregar ArrayBufferLike/SharedArrayBuffer na tipagem e não é aceito diretamente como BlobPart.
-
-CORREÇÃO
-O Buffer agora é copiado para um Uint8Array criado com ArrayBuffer normal e só então usado no Blob.
+Trocar a marca visual usada no sistema pela nova logo oficial enviada pelo usuário.
 
 ARQUIVOS ALTERADOS
-- app/api/assets/route.ts
+- components/layout/Brand.tsx
+- app/layout.tsx
+- public/brand/next-slide-logo.png
+- public/brand/logo-next-slide.png
+
+O QUE MUDA
+1. O componente global Brand agora usa a nova imagem oficial do Next Slide.
+2. A troca afeta automaticamente:
+   - tela de login;
+   - tela de cadastro;
+   - sidebar;
+   - header mobile;
+   - demais pontos que usam Brand.
+3. O metadata do app passa a apontar para a nova imagem como ícone/imagem social.
+4. Não altera regras de negócio, banco, Prisma, APIs, login, módulos, player ou conversão PPTX.
 
 BANCO
-- Não altera Prisma.
-- Não altera Neon.
-- Não precisa rodar SQL.
+- Não precisa rodar nada no Neon.
+- Não altera schema.
+- Não altera dados.
 
 VALIDAÇÃO
-- Patch aplicado somente no trecho do Blob/FormData.
-- Conferido que o arquivo mantém o fluxo ConvertAPI.
+- Conferido que o arquivo enviado existe e possui transparência real.
+- Conferido que o componente Brand não depende mais de ícone Lucide.
 - Conferido que o ZIP não contém .env, .env.local, node_modules, .next, .vercel ou segredos.
