@@ -4,7 +4,7 @@ import { LoginForm } from "@/components/auth/LoginForm";
 
 export default function LoginPage() {
   return (
-    <AuthShell title="Acessar Next Slide" subtitle="Entre para gerenciar seus módulos de gestão à vista.">
+    <AuthShell title="Bem-vindo de volta!" subtitle="Acesse sua conta para continuar">
       <Suspense><LoginForm /></Suspense>
     </AuthShell>
   );

@@ -1,31 +1,34 @@
-NEXT SLIDE — UPDATE BRAND LOGO V1
+NEXT SLIDE — UPDATE LOGIN CORPORATE V1
 
 OBJETIVO
-Trocar a marca visual usada no sistema pela nova logo oficial enviada pelo usuário.
+Refazer a tela de login no padrão corporativo premium enviado como referência, usando o background de gestão à vista em TV fornecido pelo usuário.
 
 ARQUIVOS ALTERADOS
+- components/auth/AuthShell.tsx
+- components/auth/LoginForm.tsx
 - components/layout/Brand.tsx
-- app/layout.tsx
+- app/login/page.tsx
+- public/brand/login-background.png
 - public/brand/next-slide-logo.png
 - public/brand/logo-next-slide.png
+- README_UPDATE.md
 
 O QUE MUDA
-1. O componente global Brand agora usa a nova imagem oficial do Next Slide.
-2. A troca afeta automaticamente:
-   - tela de login;
-   - tela de cadastro;
-   - sidebar;
-   - header mobile;
-   - demais pontos que usam Brand.
-3. O metadata do app passa a apontar para a nova imagem como ícone/imagem social.
-4. Não altera regras de negócio, banco, Prisma, APIs, login, módulos, player ou conversão PPTX.
+1. Login passa a ter layout corporativo em duas colunas.
+2. Lado esquerdo com logo Next Slide, headline, descrição, chips de recursos e selo de ambiente seguro.
+3. Lado direito com card premium translúcido, borda azul/ciano e glow verde.
+4. Formulário com campos maiores, botão gradiente, ícone de mostrar/ocultar senha e link de criação de organização.
+5. Background passa a usar a imagem enviada pelo usuário.
+6. Mobile continua responsivo: card centralizado e fundo corporativo preservado.
 
 BANCO
-- Não precisa rodar nada no Neon.
-- Não altera schema.
-- Não altera dados.
+- Não altera Prisma.
+- Não altera Neon.
+- Não precisa rodar SQL.
 
 VALIDAÇÃO
-- Conferido que o arquivo enviado existe e possui transparência real.
-- Conferido que o componente Brand não depende mais de ícone Lucide.
+- Conferido que o background enviado existe e foi incluído no ZIP.
+- Conferido que a logo enviada existe, possui transparência e foi incluída no ZIP.
+- Conferido que o LoginForm continua chamando a mesma API /api/auth/login.
+- Conferido que o redirect pós-login foi preservado.
 - Conferido que o ZIP não contém .env, .env.local, node_modules, .next, .vercel ou segredos.
