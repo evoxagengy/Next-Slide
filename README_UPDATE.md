@@ -1,28 +1,37 @@
-NEXT SLIDE — HOTFIX LOGIN CARD GLOW V3
+NEXT SLIDE — DASHBOARD V2
 
 OBJETIVO
-Corrigir o visual do card de login, removendo o quadrado/placa girando atrás do formulário e substituindo por um efeito premium discreto.
+Refazer a tela Dashboard do Next Slide com visual 2.0 inspirado na imagem de referência enviada pelo usuário.
 
 ARQUIVOS ALTERADOS
-- components/auth/AuthShell.tsx
+- app/dashboard/page.tsx
 - README_UPDATE.md
 
-O QUE FOI CORRIGIDO
-1. Removido o bloco conic-gradient grande atrás do login.
-2. O card voltou a ser escuro, corporativo e limpo.
-3. A animação agora fica apenas na borda do card, de forma leve.
-4. Adicionado um brilho suave que percorre a área do card, como um hover/mouse blur controlado.
-5. Mantidas as alterações anteriores:
-   - botão criar organização removido;
-   - logo maior;
-   - login corporativo;
-   - fundo de TV corporativa.
+O QUE MUDA
+1. Novo topo administrativo com CTA “Criar módulo”.
+2. Novos cards executivos:
+   - Módulos ativos;
+   - Slides publicados;
+   - Telas online agora;
+   - Links públicos ativos;
+   - Status da licença.
+3. Nova tabela premium de módulos recentes.
+4. Novo card de uso da licença com barras de progresso.
+5. Nova seção de links públicos em uso.
+6. Nova seção de TVs em exibição agora.
+7. Visual dark premium com bordas, grid, glow, cards e estilo SaaS corporativo.
+8. Mantém os dados reais do banco via Prisma.
+9. Mantém o botão de criação de módulo e links para módulos/licença.
 
 BANCO
 - Não altera Prisma.
 - Não altera Neon.
 - Não precisa rodar SQL.
 
+OBSERVAÇÃO TÉCNICA
+O sistema ainda não possui uma tabela dedicada de telemetria/dispositivos de TV online. Por isso, “Telas online agora” e “TVs em exibição agora” usam os módulos ativos como base operacional. Quando for criado um módulo de devices/heartbeat, essa área poderá mostrar TVs reais por localização.
+
 VALIDAÇÃO
-- Conferido que o hotfix altera apenas o AuthShell.
+- Conferida compatibilidade com o schema atual: User, License, SlideModule, Slide e MediaAsset.
+- Conferidos imports de componentes existentes: AppShell, Card, Button e Badge.
 - Conferido que não contém .env, .env.local, node_modules, .next, .vercel ou segredos.
