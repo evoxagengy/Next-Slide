@@ -31,6 +31,7 @@ export default async function ModulesPage() {
       defaultTransition: module.defaultTransition,
       theme: module.theme,
       logoUrl: module.logoUrl,
+      showClock: module.showClock,
       updatedAt: module.updatedAt.toISOString(),
       createdAt: module.createdAt.toISOString(),
       lastTokenRotatedAt: module.lastTokenRotatedAt.toISOString(),

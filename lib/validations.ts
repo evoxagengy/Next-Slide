@@ -33,7 +33,8 @@ export const moduleCreateSchema = z.object({
   defaultDuration: durationSchema.default(15),
   defaultTransition: transitionSchema,
   theme: z.string().max(40).default("next-dark"),
-  logoUrl: optionalAssetOrUrlSchema
+  logoUrl: optionalAssetOrUrlSchema,
+  showClock: z.boolean().default(true)
 });
 
 const moduleBulkItemSchema = z.object({

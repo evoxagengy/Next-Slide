@@ -53,6 +53,7 @@ export async function POST(request: Request, ctx: Ctx) {
         defaultTransition: source.defaultTransition,
         theme: source.theme,
         logoUrl: source.logoUrl,
+        showClock: source.showClock,
         createdById: user.id,
         slides: {
           create: source.slides.map((slide) => ({

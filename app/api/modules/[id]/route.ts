@@ -50,6 +50,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         defaultTransition: data.defaultTransition ? sanitizeText(data.defaultTransition, 40) : undefined,
         theme: data.theme ? sanitizeText(data.theme, 40) : undefined,
         logoUrl: data.logoUrl !== undefined ? (data.logoUrl ? normalizeAssetOrUrl(data.logoUrl) : null) : undefined,
+        showClock: data.showClock,
         isActive: data.isActive
       }
     });

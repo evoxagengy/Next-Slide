@@ -154,6 +154,7 @@ export async function GET() {
         defaultTransition: module.defaultTransition,
         theme: module.theme,
         logoUrl: module.logoUrl,
+        showClock: module.showClock,
         updatedAt: module.updatedAt,
         createdAt: module.createdAt,
         slidesCount: module._count.slides,
@@ -196,6 +197,7 @@ export async function POST(request: Request) {
           defaultTransition: data.defaultTransition,
           theme: sanitizeText(data.theme, 40),
           logoUrl: data.logoUrl ? normalizeAssetOrUrl(data.logoUrl) : null,
+          showClock: data.showClock,
           createdById: user.id
         }
       });
@@ -224,6 +226,7 @@ export async function POST(request: Request) {
         defaultTransition: data.defaultTransition,
         theme: sanitizeText(data.theme, 40),
         logoUrl: data.logoUrl ? normalizeAssetOrUrl(data.logoUrl) : null,
+        showClock: data.showClock,
         createdById: user.id,
         slides: {
           create: pendingSlides.map((slide) => ({

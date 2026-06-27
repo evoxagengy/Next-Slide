@@ -28,6 +28,7 @@ type ReadyState = {
     defaultDuration: number;
     defaultTransition: string;
     logoUrl: string | null;
+    showClock: boolean;
   };
   company: { name: string };
   slides: PlayerSlide[];
@@ -212,7 +213,7 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
           )}
         </motion.section>
       </AnimatePresence>
-      <ClockOverlay clock={clock} />
+      {state.module.showClock && <ClockOverlay clock={clock} />}
     </main>
   );
 }

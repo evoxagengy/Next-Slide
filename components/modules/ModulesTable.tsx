@@ -34,6 +34,7 @@ export type ModuleRow = {
   defaultTransition: string;
   theme: string;
   logoUrl: string | null;
+  showClock: boolean;
   updatedAt: string;
   createdAt: string;
   lastTokenRotatedAt: string;
@@ -123,7 +124,7 @@ export function ModulesTable({ modules, canDelete }: { modules: ModuleRow[]; can
                 </td>
                 <td className="px-5 py-4">
                   <div className="font-bold text-text">{module.slidesCount}</div>
-                  <div className="text-xs text-muted">{module.defaultDuration}s padrão · {module.defaultTransition === "cut" ? "Cut" : "Fade"}</div>
+                  <div className="text-xs text-muted">{module.defaultDuration}s padrão · {module.defaultTransition === "cut" ? "Cut" : "Fade"} · {module.showClock ? "com relógio" : "sem relógio"}</div>
                 </td>
                 <td className="px-5 py-4"><Badge tone={module.isActive ? "success" : "warning"}>{module.isActive ? "Ativo" : "Inativo"}</Badge></td>
                 <td className="px-5 py-4">

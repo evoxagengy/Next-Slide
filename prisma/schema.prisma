@@ -128,6 +128,7 @@ model SlideModule {
   defaultTransition  String   @default("fade")
   theme              String   @default("next-dark")
   logoUrl            String?
+  showClock          Boolean  @default(true)
   lastTokenRotatedAt DateTime @default(now())
   createdById        String
   createdAt          DateTime @default(now())

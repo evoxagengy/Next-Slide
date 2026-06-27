@@ -18,6 +18,7 @@ export type PlayerModuleState =
         defaultDuration: number;
         defaultTransition: string;
         logoUrl: string | null;
+        showClock: boolean;
       };
       company: { name: string };
       slides: Array<{
@@ -73,7 +74,8 @@ export async function getPlayerModule(publicToken: string): Promise<PlayerModule
       theme: module.theme,
       defaultDuration: module.defaultDuration,
       defaultTransition: module.defaultTransition,
-      logoUrl: withPublicToken(module.logoUrl, publicToken)
+      logoUrl: withPublicToken(module.logoUrl, publicToken),
+      showClock: module.showClock
     },
     company: { name: module.license.companyName },
     slides: module.slides.map((slide) => ({

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Clock, FileUp, Globe2, Image as ImageIcon, Plus, Presentation, Trash2, UploadCloud, Wand2, X } from "lucide-react";
+import { Clock, Globe2, Image as ImageIcon, Plus, Trash2, UploadCloud, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,13 @@ type MediaItem = {
   id: string;
   title: string;
   duration: string;
-  file: File;
+  file?: File;
   fileName: string;
   fileSize: number;
   previewUrl?: string;
+  uploadedUrl?: string;
+  source: "image" | "pptx-slide";
+  sourceLabel?: string;
 };
 
 type SiteItem = {
@@ -36,6 +39,26 @@ type ModuleCreateFormProps = {
   modalMode?: boolean;
   onCreated?: () => void;
   onCancel?: () => void;
+};
+
+type ExtractedPowerPointSlide = {
+  slideNumber: number;
+  assetId: string;
+  url: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+type UploadedAsset = {
+  id: string | null;
+  url: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  kind: "image" | "powerpoint";
+  conversion?: "extracted-images";
+  slides?: ExtractedPowerPointSlide[];
 };
 
 function makeId() {
@@ -58,7 +81,7 @@ function cleanFileTitle(fileName: string) {
   return fileName.replace(/\.[^.]+$/, "");
 }
 
-function itemFromFile(file: File): MediaItem {
+function imageItemFromFile(file: File): MediaItem {
   return {
     id: makeId(),
     title: cleanFileTitle(file.name),
@@ -66,33 +89,14 @@ function itemFromFile(file: File): MediaItem {
     file,
     fileName: file.name,
     fileSize: file.size,
-    previewUrl: filePreview(file)
+    previewUrl: filePreview(file),
+    source: "image"
   };
 }
 
 function emptySite(): SiteItem {
   return { id: makeId(), title: "", url: "", duration: "", refreshInterval: "", openMode: "IFRAME" };
 }
-
-type ExtractedPowerPointSlide = {
-  slideNumber: number;
-  assetId: string;
-  url: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-};
-
-type UploadedAsset = {
-  id: string | null;
-  url: string | null;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  kind: "image" | "powerpoint";
-  conversion?: "extracted-images";
-  slides?: ExtractedPowerPointSlide[];
-};
 
 async function uploadAsset(file: File) {
   const formData = new FormData();
@@ -101,65 +105,6 @@ async function uploadAsset(file: File) {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || `Não foi possível enviar ${file.name}.`);
   return data.asset as UploadedAsset;
-}
-
-async function compactImageItems(items: MediaItem[], fallbackDuration: number, fit: "COVER" | "CONTAIN") {
-  const result = [] as Array<{
-    title: string | null;
-    url: string;
-    duration: number;
-    fit: "COVER" | "CONTAIN";
-    openMode: "IFRAME" | "NEW_TAB" | "PROXY";
-    refreshInterval: number | null;
-  }>;
-
-  for (const item of items) {
-    const asset = await uploadAsset(item.file);
-    if (!asset.url) throw new Error(`Não foi possível gerar URL para ${item.fileName}.`);
-    result.push({
-      title: item.title.trim() || cleanFileTitle(asset.fileName),
-      url: asset.url,
-      duration: item.duration ? Number(item.duration) : fallbackDuration,
-      fit,
-      openMode: "IFRAME",
-      refreshInterval: null
-    });
-  }
-
-  return result;
-}
-
-
-async function compactPowerPointItems(items: MediaItem[], fallbackDuration: number) {
-  const result = [] as Array<{
-    title: string | null;
-    url: string;
-    duration: number;
-    fit: "COVER" | "CONTAIN";
-    openMode: "IFRAME" | "NEW_TAB" | "PROXY";
-    refreshInterval: number | null;
-  }>;
-
-  for (const item of items) {
-    const asset = await uploadAsset(item.file);
-    if (!asset.slides?.length) {
-      throw new Error(`${item.fileName} não gerou imagens. Envie um PPTX com slides em imagem ou exporte a apresentação como PNG/JPG.`);
-    }
-
-    const baseTitle = item.title.trim() || cleanFileTitle(item.fileName);
-    for (const slide of asset.slides) {
-      result.push({
-        title: `${baseTitle} - Slide ${String(slide.slideNumber).padStart(2, "0")}`,
-        url: slide.url,
-        duration: item.duration ? Number(item.duration) : fallbackDuration,
-        fit: "COVER",
-        openMode: "IFRAME",
-        refreshInterval: null
-      });
-    }
-  }
-
-  return result;
 }
 
 function compactSites(items: SiteItem[], fallbackDuration: number) {
@@ -179,6 +124,7 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [convertingPptx, setConvertingPptx] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [durationMode, setDurationMode] = useState<"global" | "separate">("global");
@@ -186,36 +132,129 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
   const [imageDuration, setImageDuration] = useState("15");
   const [siteDuration, setSiteDuration] = useState("30");
   const [transition, setTransition] = useState<"fade" | "cut">("fade");
+  const [showClock, setShowClock] = useState(true);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
   const [showSiteEveryImages, setShowSiteEveryImages] = useState("0");
-  const [images, setImages] = useState<MediaItem[]>([]);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [sites, setSites] = useState<SiteItem[]>([]);
-  const [powerPoints, setPowerPoints] = useState<MediaItem[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const imageSeconds = Number((durationMode === "global" ? defaultDuration : imageDuration) || 15);
   const siteSeconds = Number((durationMode === "global" ? defaultDuration : siteDuration) || 30);
-  const totalValidSlides = useMemo(() => images.length + powerPoints.length + sites.filter((item) => item.url.trim()).length, [images, powerPoints, sites]);
+  const totalValidSlides = useMemo(() => mediaItems.length + sites.filter((item) => item.url.trim()).length, [mediaItems, sites]);
 
-  function addFiles(kind: "images" | "powerPoints", fileList: FileList | null) {
+  function addImageFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
-    const items = Array.from(fileList).map(itemFromFile);
-    if (kind === "images") setImages((current) => [...current, ...items]);
-    else setPowerPoints((current) => [...current, ...items]);
+    const items = Array.from(fileList).map(imageItemFromFile);
+    setMediaItems((current) => [...current, ...items]);
   }
 
-  function updateFile(kind: "images" | "powerPoints", id: string, patch: Partial<MediaItem>) {
-    const setter = kind === "images" ? setImages : setPowerPoints;
-    setter((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  async function addPowerPointFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setConvertingPptx(true);
+    setError("");
+    try {
+      const nextSlides: MediaItem[] = [];
+      for (const file of Array.from(fileList)) {
+        const asset = await uploadAsset(file);
+        if (!asset.slides?.length) {
+          throw new Error(`${file.name} não gerou imagens. Salve a apresentação como .pptx e use slides com imagens/fundos exportáveis.`);
+        }
+        const baseTitle = cleanFileTitle(file.name);
+        asset.slides.forEach((slide) => {
+          nextSlides.push({
+            id: makeId(),
+            title: `${baseTitle} - Slide ${String(slide.slideNumber).padStart(2, "0")}`,
+            duration: "",
+            fileName: slide.fileName,
+            fileSize: slide.sizeBytes,
+            previewUrl: slide.url,
+            uploadedUrl: slide.url,
+            source: "pptx-slide",
+            sourceLabel: file.name
+          });
+        });
+      }
+      setMediaItems((current) => [...current, ...nextSlides]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao converter PPTX.");
+    } finally {
+      setConvertingPptx(false);
+    }
   }
 
-  function removeFile(kind: "images" | "powerPoints", id: string) {
-    const setter = kind === "images" ? setImages : setPowerPoints;
-    setter((current) => current.filter((item) => item.id !== id));
+  function updateMedia(id: string, patch: Partial<MediaItem>) {
+    setMediaItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function removeMedia(id: string) {
+    setMediaItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  function moveMedia(id: string, direction: -1 | 1) {
+    setMediaItems((current) => {
+      const index = current.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const copy = [...current];
+      const [item] = copy.splice(index, 1);
+      copy.splice(target, 0, item);
+      return copy;
+    });
+  }
+
+  function moveDraggedMedia(targetId: string) {
+    if (!draggingId || draggingId === targetId) return;
+    setMediaItems((current) => {
+      const from = current.findIndex((item) => item.id === draggingId);
+      const to = current.findIndex((item) => item.id === targetId);
+      if (from < 0 || to < 0) return current;
+      const copy = [...current];
+      const [item] = copy.splice(from, 1);
+      copy.splice(to, 0, item);
+      return copy;
+    });
+    setDraggingId(null);
   }
 
   function updateSite(id: string, patch: Partial<SiteItem>) {
     setSites((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  async function compactMediaItems(items: MediaItem[], fallbackDuration: number) {
+    const result = [] as Array<{
+      title: string | null;
+      url: string;
+      duration: number;
+      fit: "COVER";
+      openMode: "IFRAME";
+      refreshInterval: null;
+    }>;
+
+    for (const item of items) {
+      let url = item.uploadedUrl;
+      let fileName = item.fileName;
+
+      if (!url) {
+        if (!item.file) throw new Error(`Arquivo inválido: ${item.fileName}.`);
+        const asset = await uploadAsset(item.file);
+        if (!asset.url) throw new Error(`Não foi possível gerar URL para ${item.fileName}.`);
+        url = asset.url;
+        fileName = asset.fileName;
+      }
+
+      result.push({
+        title: item.title.trim() || cleanFileTitle(fileName),
+        url,
+        duration: item.duration ? Number(item.duration) : fallbackDuration,
+        fit: "COVER",
+        openMode: "IFRAME",
+        refreshInterval: null
+      });
+    }
+
+    return result;
   }
 
   async function submit() {
@@ -224,11 +263,11 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
 
     try {
       if (!name.trim()) throw new Error("Informe o nome do módulo.");
-      if (totalValidSlides === 0) throw new Error("Adicione pelo menos uma imagem, site ou PowerPoint.");
+      if (convertingPptx) throw new Error("Aguarde a conversão do PPTX terminar.");
+      if (totalValidSlides === 0) throw new Error("Adicione pelo menos uma imagem, PPTX ou site.");
 
-      const [uploadedImages, uploadedPowerPoints, logoAsset] = await Promise.all([
-        compactImageItems(images, imageSeconds, "COVER"),
-        compactPowerPointItems(powerPoints, imageSeconds),
+      const [uploadedImages, logoAsset] = await Promise.all([
+        compactMediaItems(mediaItems, imageSeconds),
         logoFile ? uploadAsset(logoFile) : Promise.resolve(null)
       ]);
 
@@ -239,11 +278,12 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
         defaultTransition: transition,
         theme: "next-dark",
         logoUrl: logoAsset?.url || "",
+        showClock,
         imageDuration: imageSeconds,
         siteDuration: siteSeconds,
         powerPointDuration: imageSeconds,
         showSiteEveryImages: Number(showSiteEveryImages || 0),
-        images: [...uploadedImages, ...uploadedPowerPoints],
+        images: uploadedImages,
         sites: compactSites(sites, siteSeconds),
         powerPoints: []
       };
@@ -272,7 +312,7 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan/30 bg-cyan/10 px-3 py-1 text-xs font-bold text-cyan"><Wand2 size={14} /> Novo módulo</div>
             <h3 className="mt-4 text-xl font-black">Crie uma apresentação simples para TV</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">Adicione arquivos do computador, links de sites e defina o tempo de exibição sem mexer em código.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">Adicione imagens, PPTX convertido em imagens, sites e defina a ordem de exibição sem mexer em código.</p>
           </div>
           <div className="rounded-2xl border border-border bg-white/[0.04] px-4 py-3 text-right">
             <div className="text-2xl font-black text-text">{totalValidSlides}</div>
@@ -284,6 +324,7 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Nome do módulo"><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Gestão à vista - Produção" required /></Field>
             <Field label="Transição"><Select value={transition} onChange={(event) => setTransition(event.target.value as "fade" | "cut")}><option value="fade">Fade</option><option value="cut">Cut seco</option></Select></Field>
+            <Field label="Mostrar data e hora"><Select value={showClock ? "yes" : "no"} onChange={(event) => setShowClock(event.target.value === "yes")}><option value="yes">Sim, no canto do player</option><option value="no">Não mostrar</option></Select></Field>
             <div className="md:col-span-2"><Field label="Descrição opcional"><Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Resumo do conteúdo exibido nesta TV." /></Field></div>
           </div>
           <div>
@@ -305,54 +346,41 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
       </Card>
 
       <Card className="p-5">
-        <div className="flex items-center gap-3"><Clock className="text-cyan" size={22} /><div><h3 className="text-lg font-bold">Tempo dos slides</h3><p className="text-sm text-muted">Escolha um tempo único para tudo ou separe sites dos arquivos.</p></div></div>
+        <div className="flex items-center gap-3"><Clock className="text-cyan" size={22} /><div><h3 className="text-lg font-bold">Tempo dos slides</h3><p className="text-sm text-muted">Escolha um tempo único para tudo ou separe sites das imagens. PPTX convertido usa o tempo das imagens.</p></div></div>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <Field label="Como deseja configurar?"><Select value={durationMode} onChange={(event) => setDurationMode(event.target.value as "global" | "separate")}><option value="global">Usar tempo padrão geral</option><option value="separate">Separar imagem/PowerPoint e site</option></Select></Field>
+          <Field label="Como deseja configurar?"><Select value={durationMode} onChange={(event) => setDurationMode(event.target.value as "global" | "separate")}><option value="global">Usar tempo padrão geral</option><option value="separate">Separar imagem/PPTX e site</option></Select></Field>
           <Field label="Tempo padrão geral (s)"><Input type="number" min={3} value={defaultDuration} onChange={(event) => setDefaultDuration(event.target.value)} /></Field>
-          {durationMode === "separate" && <Field label="Tempo imagem e PowerPoint (s)"><Input type="number" min={3} value={imageDuration} onChange={(event) => setImageDuration(event.target.value)} /></Field>}
+          {durationMode === "separate" && <Field label="Tempo imagem e PPTX (s)"><Input type="number" min={3} value={imageDuration} onChange={(event) => setImageDuration(event.target.value)} /></Field>}
           {durationMode === "separate" && <Field label="Tempo sites/dashboards (s)"><Input type="number" min={3} value={siteDuration} onChange={(event) => setSiteDuration(event.target.value)} /></Field>}
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
           <Field label="Mostrar site a cada N imagens"><Input type="number" min={0} value={showSiteEveryImages} onChange={(event) => setShowSiteEveryImages(event.target.value)} /></Field>
-          <div className="rounded-2xl border border-border bg-white/[0.04] p-4 text-sm leading-6 text-muted">Exemplo: use <b className="text-text">10</b> para mostrar um site depois de cada 10 imagens. Use <b className="text-text">0</b> para seguir a ordem padrão.</div>
+          <div className="rounded-2xl border border-border bg-white/[0.04] p-4 text-sm leading-6 text-muted">Exemplo: use <b className="text-text">10</b> para mostrar um site depois de cada 10 imagens. Use <b className="text-text">0</b> para seguir a ordem padrão. A ordem manual das imagens será respeitada.</div>
         </div>
       </Card>
 
-      <FileTableSection
-        icon={<ImageIcon size={22} />}
-        title="Imagens"
-        description="As imagens entram como arquivo e serão exibidas em tela cheia na TV."
-        items={images}
-        kind="images"
-        accept={IMAGE_ACCEPT}
-        addLabel="Selecionar imagens"
-        addFiles={addFiles}
-        update={updateFile}
-        remove={removeFile}
+      <MediaTableSection
+        items={mediaItems}
+        convertingPptx={convertingPptx}
+        addImageFiles={addImageFiles}
+        addPowerPointFiles={addPowerPointFiles}
+        update={updateMedia}
+        remove={removeMedia}
+        move={moveMedia}
+        draggingId={draggingId}
+        setDraggingId={setDraggingId}
+        moveDragged={moveDraggedMedia}
       />
 
       <SiteTableSection items={sites} add={() => setSites((current) => [...current, emptySite()])} update={updateSite} remove={(id) => setSites((current) => current.filter((item) => item.id !== id))} />
 
-      <FileTableSection
-        icon={<Presentation size={22} />}
-        title="PowerPoints"
-        description="Selecione arquivos .pptx. O Next Slide vai extrair cada slide como imagem e exibir automaticamente na TV."
-        items={powerPoints}
-        kind="powerPoints"
-        accept={POWERPOINT_ACCEPT}
-        addLabel="Selecionar PPTX"
-        addFiles={addFiles}
-        update={updateFile}
-        remove={removeFile}
-      />
-
       {error && <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-red-200">{error}</div>}
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card/90 p-4 shadow-card backdrop-blur-xl">
-        <div><div className="font-bold text-text">Pronto para criar</div><div className="text-sm text-muted">O módulo será criado e aparecerá na tabela de módulos. Você não será levado para outra página.</div></div>
+        <div><div className="font-bold text-text">Pronto para criar</div><div className="text-sm text-muted">O módulo será criado com as imagens na ordem definida acima. Você não será levado para outra página.</div></div>
         <div className="flex flex-wrap gap-2">
           {onCancel && <Button type="button" variant="secondary" onClick={onCancel}><X size={16} /> Cancelar</Button>}
-          <Button type="button" onClick={submit} disabled={loading} size="lg">{loading ? "Enviando e criando..." : "Criar módulo"}</Button>
+          <Button type="button" onClick={submit} disabled={loading || convertingPptx} size="lg">{loading ? "Enviando e criando..." : convertingPptx ? "Convertendo PPTX..." : "Criar módulo"}</Button>
         </div>
       </div>
     </div>
@@ -363,36 +391,58 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><Label>{label}</Label>{children}</div>;
 }
 
-function FileTableSection({ icon, title, description, items, kind, accept, addLabel, addFiles, update, remove }: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
+function MediaTableSection({ items, convertingPptx, addImageFiles, addPowerPointFiles, update, remove, move, draggingId, setDraggingId, moveDragged }: {
   items: MediaItem[];
-  kind: "images" | "powerPoints";
-  accept: string;
-  addLabel: string;
-  addFiles: (kind: "images" | "powerPoints", files: FileList | null) => void;
-  update: (kind: "images" | "powerPoints", id: string, patch: Partial<MediaItem>) => void;
-  remove: (kind: "images" | "powerPoints", id: string) => void;
+  convertingPptx: boolean;
+  addImageFiles: (files: FileList | null) => void;
+  addPowerPointFiles: (files: FileList | null) => void;
+  update: (id: string, patch: Partial<MediaItem>) => void;
+  remove: (id: string) => void;
+  move: (id: string, direction: -1 | 1) => void;
+  draggingId: string | null;
+  setDraggingId: (id: string | null) => void;
+  moveDragged: (targetId: string) => void;
 }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border p-5">
-        <div className="flex gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan/30 bg-cyan/10 text-cyan">{icon}</div><div><h3 className="text-lg font-bold">{title}</h3><p className="mt-1 text-sm leading-6 text-muted">{description}</p></div></div>
-        <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-white/5 px-4 text-sm font-semibold text-text transition hover:bg-white/10"><UploadCloud size={16} /> {addLabel}<input type="file" accept={accept} multiple className="hidden" onChange={(event) => { addFiles(kind, event.target.files); event.currentTarget.value = ""; }} /></label>
+        <div className="flex gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan/30 bg-cyan/10 text-cyan"><ImageIcon size={22} /></div><div><h3 className="text-lg font-bold">Imagens da apresentação</h3><p className="mt-1 text-sm leading-6 text-muted">Selecione imagens ou um PPTX. PPTX será convertido em imagens e seguirá a ordem abaixo.</p></div></div>
+        <div className="flex flex-wrap gap-2">
+          <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-white/5 px-4 text-sm font-semibold text-text transition hover:bg-white/10"><UploadCloud size={16} /> Selecionar imagens<input type="file" accept={IMAGE_ACCEPT} multiple className="hidden" onChange={(event) => { addImageFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
+          <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-cyan/30 bg-cyan/10 px-4 text-sm font-semibold text-cyan transition hover:bg-cyan/15"><UploadCloud size={16} /> Selecionar PPTX<input type="file" accept={POWERPOINT_ACCEPT} multiple className="hidden" onChange={(event) => { addPowerPointFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
+        </div>
       </div>
-      {items.length === 0 ? <div className="p-5 text-center text-sm text-muted">Nenhum arquivo adicionado.</div> : (
+      {convertingPptx && <div className="border-b border-cyan/20 bg-cyan/10 px-5 py-3 text-sm font-semibold text-cyan">Convertendo PPTX em imagens. Aguarde antes de criar o módulo...</div>}
+      {items.length === 0 ? <div className="p-5 text-center text-sm text-muted">Nenhuma imagem adicionada.</div> : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead className="bg-white/[0.04] text-left text-xs uppercase tracking-[0.16em] text-muted"><tr><th className="px-4 py-3">Preview</th><th className="px-4 py-3">Arquivo</th><th className="px-4 py-3">Título</th><th className="px-4 py-3">Tempo próprio</th><th className="px-4 py-3 text-right">Ação</th></tr></thead>
+          <table className="w-full min-w-[820px] text-sm">
+            <thead className="bg-white/[0.04] text-left text-xs uppercase tracking-[0.16em] text-muted"><tr><th className="px-4 py-3">Ordem</th><th className="px-4 py-3">Preview</th><th className="px-4 py-3">Arquivo</th><th className="px-4 py-3">Título</th><th className="px-4 py-3">Tempo próprio</th><th className="px-4 py-3 text-right">Ações</th></tr></thead>
             <tbody className="divide-y divide-border/70">
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td className="px-4 py-3"><div className="flex h-14 w-20 items-center justify-center overflow-hidden rounded-xl border border-border bg-black/30">{item.previewUrl ? <img src={item.previewUrl} alt={item.title} className="h-full w-full object-cover" /> : <Presentation size={20} className="text-cyan" />}</div></td>
-                  <td className="px-4 py-3"><div className="font-bold text-text">{item.fileName}</div><div className="text-xs text-muted">{formatBytes(item.fileSize)}</div></td>
-                  <td className="px-4 py-3"><Input value={item.title} onChange={(event) => update(kind, item.id, { title: event.target.value })} placeholder="Título opcional" /></td>
-                  <td className="px-4 py-3"><Input value={item.duration} type="number" min={3} onChange={(event) => update(kind, item.id, { duration: event.target.value })} placeholder="Usar global" /></td>
-                  <td className="px-4 py-3 text-right"><Button type="button" variant="danger" size="sm" onClick={() => remove(kind, item.id)}><Trash2 size={15} /> Excluir</Button></td>
+              {items.map((item, index) => (
+                <tr
+                  key={item.id}
+                  draggable
+                  onDragStart={() => setDraggingId(item.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => moveDragged(item.id)}
+                  onDragEnd={() => setDraggingId(null)}
+                  className={draggingId === item.id ? "bg-cyan/10 opacity-70" : ""}
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="cursor-grab rounded-lg border border-border bg-white/[0.04] px-2 py-1 text-muted active:cursor-grabbing" title="Arraste para ordenar">↕</span>
+                      <span className="w-7 text-center font-bold text-text">{index + 1}</span>
+                      <div className="flex flex-col gap-1">
+                        <button type="button" className="rounded border border-border px-2 text-xs text-muted hover:text-text disabled:opacity-30" disabled={index === 0} onClick={() => move(item.id, -1)}>↑</button>
+                        <button type="button" className="rounded border border-border px-2 text-xs text-muted hover:text-text disabled:opacity-30" disabled={index === items.length - 1} onClick={() => move(item.id, 1)}>↓</button>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3"><div className="flex h-14 w-20 items-center justify-center overflow-hidden rounded-xl border border-border bg-black/30">{item.previewUrl ? <img src={item.previewUrl} alt={item.title} className="h-full w-full object-cover" /> : <ImageIcon size={20} className="text-cyan" />}</div></td>
+                  <td className="px-4 py-3"><div className="font-bold text-text">{item.fileName}</div><div className="text-xs text-muted">{item.source === "pptx-slide" ? `Convertido de ${item.sourceLabel || "PPTX"}` : formatBytes(item.fileSize)}</div></td>
+                  <td className="px-4 py-3"><Input value={item.title} onChange={(event) => update(item.id, { title: event.target.value })} placeholder="Título opcional" /></td>
+                  <td className="px-4 py-3"><Input value={item.duration} type="number" min={3} onChange={(event) => update(item.id, { duration: event.target.value })} placeholder="Usar global" /></td>
+                  <td className="px-4 py-3 text-right"><Button type="button" variant="danger" size="sm" onClick={() => remove(item.id)}><Trash2 size={15} /> Excluir</Button></td>
                 </tr>
               ))}
             </tbody>

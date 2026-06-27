@@ -63,6 +63,7 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
   const [isActive, setIsActive] = useState(module.isActive);
   const [defaultDuration, setDefaultDuration] = useState(String(module.defaultDuration));
   const [transition, setTransition] = useState(module.defaultTransition === "cut" ? "cut" : "fade");
+  const [showClock, setShowClock] = useState(module.showClock);
   const [logoUrl, setLogoUrl] = useState(module.logoUrl || "");
   const [logoPreview, setLogoPreview] = useState(module.logoUrl || "");
   const [slides, setSlides] = useState<EditableSlide[]>(module.slides);
@@ -105,6 +106,7 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
           defaultTransition: transition,
           theme: module.theme || "next-dark",
           logoUrl: logoUrl || null,
+          showClock,
           isActive
         })
       });
@@ -176,6 +178,7 @@ export function ModuleEditModal({ module, trigger }: { module: ModuleRow; trigge
                     <Field label="Status"><Select value={isActive ? "active" : "inactive"} onChange={(event) => setIsActive(event.target.value === "active")}><option value="active">Ativo</option><option value="inactive">Inativo</option></Select></Field>
                     <Field label="Tempo padrão geral (s)"><Input type="number" min={3} value={defaultDuration} onChange={(event) => setDefaultDuration(event.target.value)} /></Field>
                     <Field label="Transição"><Select value={transition} onChange={(event) => setTransition(event.target.value as "fade" | "cut")}><option value="fade">Fade</option><option value="cut">Cut seco</option></Select></Field>
+                    <Field label="Mostrar data e hora no player"><Select value={showClock ? "yes" : "no"} onChange={(event) => setShowClock(event.target.value === "yes")}><option value="yes">Sim, mostrar no canto</option><option value="no">Não mostrar</option></Select></Field>
                     <div className="md:col-span-2"><Field label="Descrição opcional"><Textarea value={description} onChange={(event) => setDescription(event.target.value)} /></Field></div>
                   </div>
                   <div>
