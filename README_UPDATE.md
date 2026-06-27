@@ -1,37 +1,57 @@
-NEXT SLIDE — DASHBOARD V2
+NEXT SLIDE — ONLINE DEVICES V1
 
 OBJETIVO
-Refazer a tela Dashboard do Next Slide com visual 2.0 inspirado na imagem de referência enviada pelo usuário.
+Criar o módulo real de dispositivos online para que o dashboard deixe de simular TVs online com base em módulos ativos.
 
-ARQUIVOS ALTERADOS
+O QUE FOI CRIADO
+1. Nova tabela Prisma DeviceSession.
+2. Novo endpoint público de heartbeat:
+   - POST /api/player/[publicToken]/heartbeat
+3. O player público /play/[publicToken] agora registra automaticamente:
+   - dispositivo/navegador;
+   - módulo em exibição;
+   - slide atual;
+   - resolução da tela;
+   - timezone;
+   - user agent;
+   - último sinal.
+4. Nova tela:
+   - /devices
+   - lista TVs/navegadores online e offline.
+5. Dashboard atualizado:
+   - “Telas online agora” agora vem de DeviceSession real;
+   - “TVs em exibição agora” mostra dispositivos reais;
+   - uso da licença usa TVs conectadas reais.
+6. Sidebar atualizada com menu “Dispositivos”.
+
+REGRAS DE ONLINE
+- Um dispositivo é considerado online quando enviou heartbeat nos últimos 90 segundos.
+- O player envia heartbeat imediatamente e depois a cada 30 segundos.
+- Se a TV fechar, perder internet ou desligar, ela aparece offline após o limite de tempo.
+
+ARQUIVOS ALTERADOS/CRIADOS
+- prisma/schema.prisma
+- app/api/player/[publicToken]/heartbeat/route.ts
+- components/player/TVPlayer.tsx
 - app/dashboard/page.tsx
+- app/devices/page.tsx
+- components/layout/Sidebar.tsx
 - README_UPDATE.md
 
-O QUE MUDA
-1. Novo topo administrativo com CTA “Criar módulo”.
-2. Novos cards executivos:
-   - Módulos ativos;
-   - Slides publicados;
-   - Telas online agora;
-   - Links públicos ativos;
-   - Status da licença.
-3. Nova tabela premium de módulos recentes.
-4. Novo card de uso da licença com barras de progresso.
-5. Nova seção de links públicos em uso.
-6. Nova seção de TVs em exibição agora.
-7. Visual dark premium com bordas, grid, glow, cards e estilo SaaS corporativo.
-8. Mantém os dados reais do banco via Prisma.
-9. Mantém o botão de criação de módulo e links para módulos/licença.
-
 BANCO
-- Não altera Prisma.
-- Não altera Neon.
-- Não precisa rodar SQL.
-
-OBSERVAÇÃO TÉCNICA
-O sistema ainda não possui uma tabela dedicada de telemetria/dispositivos de TV online. Por isso, “Telas online agora” e “TVs em exibição agora” usam os módulos ativos como base operacional. Quando for criado um módulo de devices/heartbeat, essa área poderá mostrar TVs reais por localização.
+- A Vercel já executa yarn prisma db push no deploy.
+- Portanto, normalmente não precisa rodar SQL manual no Neon.
+- O deploy criará a tabela DeviceSession automaticamente.
 
 VALIDAÇÃO
-- Conferida compatibilidade com o schema atual: User, License, SlideModule, Slide e MediaAsset.
-- Conferidos imports de componentes existentes: AppShell, Card, Button e Badge.
-- Conferido que não contém .env, .env.local, node_modules, .next, .vercel ou segredos.
+- Conferido schema Prisma e relações.
+- Conferido endpoint público com token hash.
+- Conferido que o player não trava caso o heartbeat falhe.
+- Conferido que o dashboard usa contagem real de dispositivos.
+- Conferido que o ZIP não contém .env, .env.local, node_modules, .next, .vercel ou segredos.
+
+TESTE APÓS DEPLOY
+1. Abra um link público de módulo em uma aba/TV.
+2. Aguarde até 30 segundos.
+3. Acesse /dashboard e veja “Telas online agora”.
+4. Acesse /devices para ver o dispositivo detectado.

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, MonitorPlay, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, MonitorPlay, Settings, ShieldCheck, Tv, Users } from "lucide-react";
 import { Brand } from "@/components/layout/Brand";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/modules", label: "Módulos", icon: MonitorPlay },
+  { href: "/devices", label: "Dispositivos", icon: Tv },
   { href: "/users", label: "Gerenciador", icon: Users },
   { href: "/license", label: "Licença", icon: ShieldCheck },
   { href: "/settings", label: "Configurações", icon: Settings }

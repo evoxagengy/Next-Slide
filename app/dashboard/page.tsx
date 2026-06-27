@@ -4,7 +4,6 @@ import {
   BarChart3,
   Box,
   Building2,
-  CalendarClock,
   ExternalLink,
   Image,
   Link2,
@@ -13,7 +12,8 @@ import {
   Plus,
   ShieldCheck,
   Tv,
-  Users
+  Users,
+  Wifi
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
@@ -26,8 +26,11 @@ import { licenseStatusLabel, planLabel } from "@/lib/license";
 import { appUrl, decryptSecret } from "@/lib/security";
 import { formatDate, formatDateTime } from "@/lib/utils";
 
+const ONLINE_WINDOW_MS = 90_000;
+
 export default async function DashboardPage() {
   const user = await requireUser();
+  const onlineSince = new Date(Date.now() - ONLINE_WINDOW_MS);
 
   const [
     totalModules,
@@ -37,7 +40,10 @@ export default async function DashboardPage() {
     usersCount,
     mediaAssets,
     recentModules,
-    activeLinkModules
+    activeLinkModules,
+    onlineDevices,
+    totalDevices,
+    recentDevices
   ] = await Promise.all([
     prisma.slideModule.count({ where: { licenseId: user.licenseId } }),
     prisma.slideModule.count({ where: { licenseId: user.licenseId, isActive: true } }),
@@ -59,12 +65,19 @@ export default async function DashboardPage() {
       include: { _count: { select: { slides: true } } },
       orderBy: { updatedAt: "desc" },
       take: 5
+    }),
+    prisma.deviceSession.count({ where: { licenseId: user.licenseId, lastSeenAt: { gte: onlineSince } } }),
+    prisma.deviceSession.count({ where: { licenseId: user.licenseId } }),
+    prisma.deviceSession.findMany({
+      where: { licenseId: user.licenseId },
+      include: { module: { select: { id: true, name: true } } },
+      orderBy: { lastSeenAt: "desc" },
+      take: 5
     })
   ]);
 
   const maxSlidesInModule = Math.max(...recentModules.map((module) => module._count.slides), 0);
   const publicLinksActive = activeModules;
-  const screensOnline = activeModules;
   const plan = planLabel(user.license.plan);
   const licenseStatus = licenseStatusLabel(user.license.status);
 
@@ -78,7 +91,7 @@ export default async function DashboardPage() {
               <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan">Painel administrativo</p>
               <h1 className="mt-3 text-3xl font-black tracking-tight text-white md:text-4xl">Gestão à vista em tempo real</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                Acompanhe módulos, slides, links públicos, empresas e uso da licença para TVs corporativas em tempo real.
+                Acompanhe módulos, slides, links públicos, empresas, TVs online e uso da licença em tempo real.
               </p>
             </div>
             <Link href="/modules/new">
@@ -92,7 +105,7 @@ export default async function DashboardPage() {
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <MetricCard icon={Box} label="Módulos ativos" value={activeModules} detail={`${totalModules} módulos cadastrados`} accent="blue" />
           <MetricCard icon={Image} label="Slides publicados" value={totalSlides} detail={`${activeSlides} slides ativos`} accent="cyan" />
-          <MetricCard icon={Monitor} label="Telas online agora" value={screensOnline} detail={`${screensOnline} prontas para exibição`} accent="green" />
+          <MetricCard icon={Wifi} label="Telas online agora" value={onlineDevices} detail={`${totalDevices} dispositivos registrados`} accent="green" />
           <MetricCard icon={Link2} label="Links públicos ativos" value={publicLinksActive} detail={`${publicLinksActive} links disponíveis`} accent="blue" />
           <LicenseMetricCard status={licenseStatus} plan={plan} expiresAt={user.license.expiresAt} />
         </section>
@@ -163,9 +176,7 @@ export default async function DashboardPage() {
                 </table>
               </div>
 
-              {recentModules.length === 0 && (
-                <div className="p-8 text-center text-sm text-slate-400">Nenhum módulo criado ainda.</div>
-              )}
+              {recentModules.length === 0 && <div className="p-8 text-center text-sm text-slate-400">Nenhum módulo criado ainda.</div>}
 
               <div className="border-t border-white/10 p-4 text-center">
                 <Link href="/modules" className="text-sm font-bold text-cyan transition hover:text-lime-300">
@@ -189,7 +200,7 @@ export default async function DashboardPage() {
               <Usage icon={Users} label="Usuários" used={usersCount} limit={user.license.maxUsers} />
               <Usage icon={Building2} label="Módulos" used={totalModules} limit={user.license.maxModules} />
               <Usage icon={Image} label="Slides por módulo" used={maxSlidesInModule} limit={user.license.maxSlidesPerModule} />
-              <Usage icon={Tv} label="Telas publicadas" used={screensOnline} limit={user.license.maxModules} />
+              <Usage icon={Tv} label="TVs conectadas" used={onlineDevices} limit={user.license.maxModules} />
               <Usage icon={Activity} label="Arquivos enviados" used={mediaAssets} limit={Math.max(user.license.maxSlidesPerModule, 1)} optional />
               <Link href="/license">
                 <Button variant="secondary" className="mt-1 w-full rounded-xl">
@@ -244,35 +255,38 @@ export default async function DashboardPage() {
             <CardHeader className="flex flex-col gap-4 border-white/10 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-xl font-black text-white">TVs em exibição agora</h2>
-                <p className="mt-1 text-sm text-muted">Módulos ativos prontos para exibição em tempo real.</p>
+                <p className="mt-1 text-sm text-muted">Dispositivos reais com heartbeat do player público.</p>
               </div>
-              <Link href="/modules">
+              <Link href="/devices">
                 <Button variant="secondary" size="sm">Ver todas as TVs <ExternalLink size={15} /></Button>
               </Link>
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-white/10">
-                {activeLinkModules.slice(0, 4).map((module, index) => (
-                  <div key={module.id} className="grid gap-3 px-5 py-4 transition hover:bg-white/[0.035] sm:grid-cols-[1fr_120px_150px_90px_36px] sm:items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-500/15 text-blue-200">
-                        <Tv size={20} />
+                {recentDevices.slice(0, 4).map((device, index) => {
+                  const online = device.lastSeenAt >= onlineSince;
+                  return (
+                    <div key={device.id} className="grid gap-3 px-5 py-4 transition hover:bg-white/[0.035] sm:grid-cols-[1fr_120px_150px_90px_36px] sm:items-center">
+                      <div className="flex items-center gap-3">
+                        <div className={online ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-500/15 text-blue-200" : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-500/20 bg-slate-500/10 text-slate-300"}>
+                          <Tv size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-white">{device.name || `TV / Navegador ${index + 1}`}</p>
+                          <p className="text-xs text-slate-500">{device.screenWidth && device.screenHeight ? `${device.screenWidth}×${device.screenHeight}` : "Tela não informada"}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-black text-white">TV {index + 1} · {module.name}</p>
-                        <p className="text-xs text-slate-500">Exibição corporativa</p>
-                      </div>
+                      <div className="text-sm text-slate-300">{device.module.name}</div>
+                      <div className="text-sm text-slate-300">{formatDateTime(device.lastSeenAt)}</div>
+                      <Badge tone={online ? "success" : "warning"}>{online ? "Online" : "Offline"}</Badge>
+                      <Monitor size={18} className="text-slate-400" />
                     </div>
-                    <div className="text-sm text-slate-300">{module.name}</div>
-                    <div className="text-sm text-slate-300">{formatDateTime(module.updatedAt)}</div>
-                    <Badge tone="success">Online</Badge>
-                    <Monitor size={18} className="text-slate-400" />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-              {activeLinkModules.length === 0 && <div className="p-8 text-center text-sm text-slate-400">Nenhum módulo ativo para TV.</div>}
+              {recentDevices.length === 0 && <div className="p-8 text-center text-sm text-slate-400">Nenhum dispositivo detectado ainda. Abra um link público em uma TV.</div>}
               <div className="border-t border-white/10 p-4 text-center">
-                <Link href="/modules" className="text-sm font-bold text-cyan transition hover:text-lime-300">Ver todas as TVs ›</Link>
+                <Link href="/devices" className="text-sm font-bold text-cyan transition hover:text-lime-300">Ver todas as TVs ›</Link>
               </div>
             </CardContent>
           </Card>

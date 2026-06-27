@@ -74,6 +74,7 @@ model License {
   auditLogs      AuditLog[]
   securityEvents SecurityEvent[]
   mediaAssets    MediaAsset[]
+  deviceSessions DeviceSession[]
 
   @@index([status])
 }
@@ -139,6 +140,7 @@ model SlideModule {
   license  License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   createdBy User   @relation("CreatedModules", fields: [createdById], references: [id])
   slides   Slide[]
+  deviceSessions DeviceSession[]
 
   @@unique([licenseId, slug])
   @@index([licenseId])
@@ -187,6 +189,36 @@ model MediaAsset {
   @@index([uploadedById])
   @@index([createdAt])
 }
+
+model DeviceSession {
+  id                String   @id @default(cuid())
+  licenseId         String
+  moduleId          String
+  deviceKey         String
+  name              String?
+  userAgent         String?
+  ipAddress         String?
+  screenWidth       Int?
+  screenHeight      Int?
+  timezone          String?
+  currentSlideId    String?
+  currentSlideTitle String?
+  currentSlideIndex Int      @default(0)
+  currentPath       String?
+  startedAt         DateTime @default(now())
+  lastSeenAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  license License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  module  SlideModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([moduleId, deviceKey])
+  @@index([licenseId])
+  @@index([moduleId])
+  @@index([lastSeenAt])
+}
+
 
 model AuditLog {
   id        String   @id @default(cuid())

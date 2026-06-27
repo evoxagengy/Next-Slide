@@ -54,6 +54,22 @@ const DEFAULT_EMBED_DECISION: EmbedDecision = {
   reason: null
 };
 
+function getOrCreateDeviceKey(publicToken: string) {
+  if (typeof window === "undefined") return "server";
+  const storageKey = `next-slide-device:${publicToken}`;
+  const existing = window.localStorage.getItem(storageKey);
+  if (existing) return existing;
+
+  const generated =
+    typeof window.crypto?.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  window.localStorage.setItem(storageKey, generated);
+  return generated;
+}
+
+
 export function TVPlayer({ publicToken }: { publicToken: string }) {
   const [state, setState] = useState<PlayerState>({ status: "loading" });
   const [index, setIndex] = useState(0);
@@ -98,6 +114,55 @@ export function TVPlayer({ publicToken }: { publicToken: string }) {
     }
     return currentSlide.contentUrl;
   }, [currentSlide, publicToken]);
+
+  const sendHeartbeat = useCallback(async () => {
+    if (state.status !== "ready") return;
+
+    try {
+      await fetch(`/api/player/${publicToken}/heartbeat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        keepalive: true,
+        body: JSON.stringify({
+          deviceKey: getOrCreateDeviceKey(publicToken),
+          screenWidth: window.screen?.width || window.innerWidth,
+          screenHeight: window.screen?.height || window.innerHeight,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          slideId: currentSlide?.id || null,
+          slideTitle: currentSlide?.title || currentSlide?.description || null,
+          slideIndex: index,
+          path: window.location.pathname
+        })
+      });
+    } catch {
+      // O heartbeat não pode interromper a apresentação da TV.
+    }
+  }, [state.status, publicToken, currentSlide?.id, currentSlide?.title, currentSlide?.description, index]);
+
+  useEffect(() => {
+    if (state.status !== "ready") return;
+
+    void sendHeartbeat();
+
+    const interval = window.setInterval(() => {
+      void sendHeartbeat();
+    }, 30_000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void sendHeartbeat();
+    };
+
+    window.addEventListener("online", sendHeartbeat);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("online", sendHeartbeat);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [state.status, sendHeartbeat]);
+
 
   useEffect(() => {
     if (state.status !== "ready" || state.slides.length === 0) return;
