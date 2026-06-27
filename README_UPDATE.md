@@ -1,20 +1,35 @@
-# Next Slide — Hotfix Manager Duplicate Prop v1
+NEXT SLIDE — HOTFIX PPTX CONVERSION V4
 
-## Objetivo
-Corrigir falha de build TypeScript em `components/users/ManagerClient.tsx`.
+OBJETIVO
+Substituir a conversão interna simplificada de PPTX por conversão fiel em PNG usando serviço externo (ConvertAPI), para que cada slide do PowerPoint seja convertido como imagem real, preservando layout, textos, fundo, personagem e elementos visuais.
 
-## Problema
-O TypeScript acusava que `companyName` poderia ser sobrescrito porque o objeto de edição da empresa declarava propriedades explícitas e depois espalhava `...current[id]`.
+ARQUIVOS INCLUÍDOS
+- app/api/assets/route.ts
+- .env.example
+- README_UPDATE.md
 
-## Correção
-A função `setCompanyEdit` agora monta um objeto `base` primeiro e depois aplica somente o patch alterado, eliminando a duplicidade de propriedades.
+O QUE FOI AJUSTADO
+1. Removida a estratégia que tentava reconstruir o slide manualmente em SVG.
+2. Novo fluxo de conversão: PPTX -> PNG por serviço de conversão externo.
+3. Cada slide convertido vira uma imagem separada no sistema.
+4. Continua respeitando os planos: Basic sem PPTX; Premium/Enterprise com PPTX.
+5. Continua sem exigir alteração no banco Neon.
 
-## Arquivos alterados
-- `components/users/ManagerClient.tsx`
+IMPORTANTE
+Para funcionar corretamente, é necessário configurar a variável:
+- CONVERTAPI_SECRET
 
-## Banco
-Não altera banco.
+E também:
+- PPTX_CONVERTER_PROVIDER="convertapi"
 
-## Teste esperado
-O build deve passar do erro:
-`companyName is specified more than once`
+SEM ISSO
+O sistema vai bloquear a conversão de PPTX com mensagem clara, ao invés de gerar imagem errada.
+
+COMO TESTAR
+1. Aplique os arquivos.
+2. Configure as envs na Vercel.
+3. Faça redeploy.
+4. Entre no sistema.
+5. Crie/edite um módulo.
+6. Envie o mesmo PPTX de teste.
+7. Confirme se cada slide virou uma imagem separada, na ordem correta.
