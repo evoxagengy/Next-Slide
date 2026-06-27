@@ -5,7 +5,9 @@ import { LoginForm } from "@/components/auth/LoginForm";
 export default function LoginPage() {
   return (
     <AuthShell title="Bem-vindo de volta!" subtitle="Acesse sua conta para continuar">
-      <Suspense><LoginForm /></Suspense>
+      <Suspense>
+        <LoginForm />
+      </Suspense>
     </AuthShell>
   );
 }

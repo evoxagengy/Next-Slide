@@ -1,7 +1,10 @@
-NEXT SLIDE — UPDATE LOGIN CORPORATE V1
+NEXT SLIDE — LOGIN POLISH V2
 
 OBJETIVO
-Refazer a tela de login no padrão corporativo premium enviado como referência, usando o background de gestão à vista em TV fornecido pelo usuário.
+Refinar a tela de login corporativa conforme solicitação:
+- remover o botão/link de criar organização;
+- aumentar a logo Next Slide;
+- adicionar animação viva no card de login com borda/luz rotacionando.
 
 ARQUIVOS ALTERADOS
 - components/auth/AuthShell.tsx
@@ -11,24 +14,24 @@ ARQUIVOS ALTERADOS
 - public/brand/login-background.png
 - public/brand/next-slide-logo.png
 - public/brand/logo-next-slide.png
-- README_UPDATE.md
 
 O QUE MUDA
-1. Login passa a ter layout corporativo em duas colunas.
-2. Lado esquerdo com logo Next Slide, headline, descrição, chips de recursos e selo de ambiente seguro.
-3. Lado direito com card premium translúcido, borda azul/ciano e glow verde.
-4. Formulário com campos maiores, botão gradiente, ícone de mostrar/ocultar senha e link de criação de organização.
-5. Background passa a usar a imagem enviada pelo usuário.
-6. Mobile continua responsivo: card centralizado e fundo corporativo preservado.
+1. O card de login agora possui borda animada com gradiente rotativo azul/ciano/verde.
+2. A logo foi aumentada no layout principal e no modo compacto.
+3. O link/botão “Criar organização” foi removido da tela de login.
+4. O login mantém:
+   - e-mail;
+   - senha;
+   - mostrar/ocultar senha;
+   - esqueceu sua senha;
+   - botão entrar;
+   - fundo corporativo.
+5. Não altera autenticação, banco, Prisma, APIs ou permissões.
 
 BANCO
-- Não altera Prisma.
-- Não altera Neon.
-- Não precisa rodar SQL.
+- Não precisa rodar nada no Neon.
 
 VALIDAÇÃO
-- Conferido que o background enviado existe e foi incluído no ZIP.
-- Conferido que a logo enviada existe, possui transparência e foi incluída no ZIP.
-- Conferido que o LoginForm continua chamando a mesma API /api/auth/login.
-- Conferido que o redirect pós-login foi preservado.
+- Conferido que não há link para /register no LoginForm.
+- Conferido que o Brand usa a nova logo.
 - Conferido que o ZIP não contém .env, .env.local, node_modules, .next, .vercel ou segredos.
