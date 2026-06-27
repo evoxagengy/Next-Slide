@@ -12,8 +12,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const MAX_POWERPOINT_BYTES = 25 * 1024 * 1024;
-const MAX_EXTRACTED_POWERPOINT_SLIDES = 120;
+const MAX_POWERPOINT_BYTES = 35 * 1024 * 1024;
+const MAX_EXTRACTED_POWERPOINT_SLIDES = 200;
+const DEFAULT_SLIDE_WIDTH_EMU = 12192000;
+const DEFAULT_SLIDE_HEIGHT_EMU = 6858000;
+const EMU_PER_POINT = 12700;
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: "image/jpeg",
@@ -48,6 +51,9 @@ type ExtractedPowerPointSlide = {
   sizeBytes: number;
 };
 
+type Xfrm = { x: number; y: number; cx: number; cy: number };
+type SlideSize = { cx: number; cy: number };
+
 function extensionOf(name: string) {
   const parts = name.toLowerCase().split(".");
   return parts.length > 1 ? parts.pop() || "" : "";
@@ -60,7 +66,6 @@ function hasPrefix(buffer: Buffer, prefix: number[]) {
 
 function detectFile(buffer: Buffer, originalName: string): DetectedFile {
   const ext = extensionOf(originalName);
-
   const isJpeg = hasPrefix(buffer, [0xff, 0xd8, 0xff]);
   const isPng = hasPrefix(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const isGif = buffer.length >= 6 && ["GIF87a", "GIF89a"].includes(buffer.subarray(0, 6).toString("ascii"));
@@ -74,7 +79,6 @@ function detectFile(buffer: Buffer, originalName: string): DetectedFile {
   if (ext === "webp" && isWebp) return { ok: true, kind: "image", ext: "webp", mimeType: "image/webp", maxBytes: MAX_IMAGE_BYTES };
   if (ext === "pptx" && isZipBased) return { ok: true, kind: "pptx", ext: "pptx", mimeType: MIME_BY_EXTENSION.pptx, maxBytes: MAX_POWERPOINT_BYTES };
   if (ext === "ppt" && isLegacyOffice) return { ok: true, kind: "legacyPpt", ext: "ppt", mimeType: MIME_BY_EXTENSION.ppt, maxBytes: MAX_POWERPOINT_BYTES };
-
   return { ok: false, error: "Arquivo não permitido ou assinatura incompatível. Envie JPG, PNG, WEBP, GIF ou PPTX válido." };
 }
 
@@ -127,10 +131,6 @@ function parseSlideRelationships(xml: string, slidePath: string) {
   return relationships;
 }
 
-function imageRelationshipIds(slideXml: string) {
-  return Array.from(slideXml.matchAll(/<a:blip\b[^>]*(?:r:embed|r:link)=["']([^"']+)["'][^>]*>/g)).map((match) => match[1]);
-}
-
 function mediaInfoFromPath(path: string) {
   const ext = extensionOf(path);
   const mimeType = IMAGE_MIME_BY_EXTENSION[ext];
@@ -138,85 +138,233 @@ function mediaInfoFromPath(path: string) {
   return { ext: ext === "jpeg" ? "jpg" : ext, mimeType };
 }
 
-async function extractPowerPointSlides(input: {
-  buffer: Buffer;
-  originalName: string;
-  licenseId: string;
-  uploadedById: string;
-}) {
+function escapeXml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function decodeXmlText(value: string) {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, number) => String.fromCodePoint(Number(number)))
+    .replace(/&amp;/g, "&");
+}
+
+function firstMatch(xml: string, regex: RegExp) {
+  const match = regex.exec(xml);
+  return match?.[1] || null;
+}
+
+function numberAttr(tag: string, name: string, fallback = 0) {
+  const value = firstMatch(tag, new RegExp(`${name}=["'](-?\\d+)["']`));
+  return value ? Number(value) : fallback;
+}
+
+function readSlideSizeFromXml(xml: string | null | undefined): SlideSize {
+  if (!xml) return { cx: DEFAULT_SLIDE_WIDTH_EMU, cy: DEFAULT_SLIDE_HEIGHT_EMU };
+  const tag = firstMatch(xml, /(<p:sldSz\b[^/]*\/>)/) || firstMatch(xml, /(<p:sldSz\b[^>]*>)/);
+  if (!tag) return { cx: DEFAULT_SLIDE_WIDTH_EMU, cy: DEFAULT_SLIDE_HEIGHT_EMU };
+  return { cx: numberAttr(tag, "cx", DEFAULT_SLIDE_WIDTH_EMU), cy: numberAttr(tag, "cy", DEFAULT_SLIDE_HEIGHT_EMU) };
+}
+
+function parseXfrm(xml: string, fallback: Xfrm): Xfrm {
+  const xfrm = firstMatch(xml, /(<a:xfrm\b[\s\S]*?<\/a:xfrm>)/);
+  if (!xfrm) return fallback;
+  const off = firstMatch(xfrm, /(<a:off\b[^>]*\/>)/);
+  const ext = firstMatch(xfrm, /(<a:ext\b[^>]*\/>)/);
+  return {
+    x: off ? numberAttr(off, "x", fallback.x) : fallback.x,
+    y: off ? numberAttr(off, "y", fallback.y) : fallback.y,
+    cx: ext ? numberAttr(ext, "cx", fallback.cx) : fallback.cx,
+    cy: ext ? numberAttr(ext, "cy", fallback.cy) : fallback.cy
+  };
+}
+
+function colorFromXml(xml: string, fallback = "#333333") {
+  const srgb = firstMatch(xml, /<a:srgbClr\b[^>]*val=["']([0-9A-Fa-f]{6})["'][^>]*>/);
+  if (srgb) return `#${srgb}`;
+  const scheme = firstMatch(xml, /<a:schemeClr\b[^>]*val=["']([^"']+)["'][^>]*>/);
+  const map: Record<string, string> = {
+    tx1: "#333333",
+    tx2: "#666666",
+    bg1: "#ffffff",
+    bg2: "#f3f4f6",
+    accent1: "#2563eb",
+    accent2: "#06b6d4",
+    accent3: "#22c55e",
+    accent4: "#facc15",
+    accent5: "#ef4444",
+    accent6: "#64748b"
+  };
+  return scheme ? map[scheme] || fallback : fallback;
+}
+
+function fillColorFromShape(xml: string) {
+  const spPr = firstMatch(xml, /(<p:spPr\b[\s\S]*?<\/p:spPr>)/);
+  if (!spPr || /<a:noFill\b/.test(spPr)) return null;
+  return colorFromXml(spPr, "#ffffff");
+}
+
+function fontSizeFromRun(runXml: string, fallback = 28 * EMU_PER_POINT) {
+  const value = firstMatch(runXml, /<a:rPr\b[^>]*sz=["'](\d+)["'][^>]*>/) || firstMatch(runXml, /<a:defRPr\b[^>]*sz=["'](\d+)["'][^>]*>/);
+  if (!value) return fallback;
+  return Math.max(8 * EMU_PER_POINT, Math.round((Number(value) / 100) * EMU_PER_POINT));
+}
+
+function textFromParagraph(paragraphXml: string) {
+  return Array.from(paragraphXml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)).map((match) => decodeXmlText(match[1])).join("");
+}
+
+function paragraphFontSize(paragraphXml: string) {
+  const firstRun = firstMatch(paragraphXml, /(<a:r\b[\s\S]*?<\/a:r>)/) || paragraphXml;
+  return fontSizeFromRun(firstRun);
+}
+
+function paragraphColor(paragraphXml: string) {
+  const firstRun = firstMatch(paragraphXml, /(<a:r\b[\s\S]*?<\/a:r>)/) || paragraphXml;
+  return colorFromXml(firstRun, "#333333");
+}
+
+function paragraphBold(paragraphXml: string) {
+  return /<a:rPr\b[^>]*\bb=["']1["']/.test(paragraphXml) || /<a:defRPr\b[^>]*\bb=["']1["']/.test(paragraphXml);
+}
+
+function paragraphAlign(paragraphXml: string) {
+  const align = firstMatch(paragraphXml, /<a:pPr\b[^>]*algn=["']([^"']+)["']/);
+  if (align === "ctr") return "middle";
+  if (align === "r") return "end";
+  return "start";
+}
+
+function wrapText(text: string, maxChars: number) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const words = clean.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function renderTextShape(shapeXml: string, slideSize: SlideSize) {
+  if (!/<p:txBody\b/.test(shapeXml)) return "";
+  const box = parseXfrm(shapeXml, { x: 0, y: 0, cx: slideSize.cx, cy: slideSize.cy });
+  const fill = fillColorFromShape(shapeXml);
+  const fillSvg = fill ? `<rect x="${box.x}" y="${box.y}" width="${box.cx}" height="${box.cy}" fill="${fill}"/>` : "";
+  const paragraphs = Array.from(shapeXml.matchAll(/<a:p\b[\s\S]*?<\/a:p>/g)).map((match) => match[0]);
+  const textSvg: string[] = [];
+  let y = box.y;
+
+  for (const paragraph of paragraphs) {
+    const text = textFromParagraph(paragraph);
+    if (!text.trim()) {
+      y += 18 * EMU_PER_POINT;
+      continue;
+    }
+    const fontSize = paragraphFontSize(paragraph);
+    const color = paragraphColor(paragraph);
+    const weight = paragraphBold(paragraph) ? 700 : 400;
+    const anchor = paragraphAlign(paragraph);
+    const maxChars = Math.max(8, Math.floor(box.cx / Math.max(1, fontSize * 0.48)));
+    const lines = wrapText(text, maxChars);
+    const lineHeight = Math.round(fontSize * 1.2);
+    const x = anchor === "middle" ? box.x + box.cx / 2 : anchor === "end" ? box.x + box.cx : box.x;
+    for (const line of lines) {
+      y += lineHeight;
+      if (y > box.y + box.cy + lineHeight) break;
+      textSvg.push(`<text x="${x}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="${weight}" fill="${color}" text-anchor="${anchor}">${escapeXml(line)}</text>`);
+    }
+  }
+  return `${fillSvg}${textSvg.join("")}`;
+}
+
+async function renderPicture(input: { zip: JSZip; pictureXml: string; rels: Map<string, string>; slideSize: SlideSize }) {
+  const rId = firstMatch(input.pictureXml, /<a:blip\b[^>]*(?:r:embed|r:link)=["']([^"']+)["'][^>]*>/);
+  if (!rId) return "";
+  const mediaPath = input.rels.get(rId);
+  if (!mediaPath) return "";
+  const mediaInfo = mediaInfoFromPath(mediaPath);
+  if (!mediaInfo) return "";
+  const mediaFile = input.zip.file(mediaPath);
+  if (!mediaFile) return "";
+  const buffer = await mediaFile.async("nodebuffer");
+  if (!buffer.length) return "";
+  const box = parseXfrm(input.pictureXml, { x: 0, y: 0, cx: input.slideSize.cx, cy: input.slideSize.cy });
+  const dataUri = `data:${mediaInfo.mimeType};base64,${buffer.toString("base64")}`;
+  return `<image x="${box.x}" y="${box.y}" width="${box.cx}" height="${box.cy}" preserveAspectRatio="xMidYMid slice" href="${dataUri}"/>`;
+}
+
+function slideBackgroundColor(slideXml: string) {
+  const bg = firstMatch(slideXml, /(<p:bg\b[\s\S]*?<\/p:bg>)/);
+  return bg ? colorFromXml(bg, "#ffffff") : "#ffffff";
+}
+
+async function renderSlideToSvg(input: { zip: JSZip; slideXml: string; slideSize: SlideSize; rels: Map<string, string> }) {
+  const elements: string[] = [];
+  const shapeRegex = /<p:(pic|sp)\b[\s\S]*?<\/p:\1>/g;
+  let match: RegExpExecArray | null;
+  while ((match = shapeRegex.exec(input.slideXml))) {
+    const type = match[1];
+    const block = match[0];
+    if (type === "pic") elements.push(await renderPicture({ zip: input.zip, pictureXml: block, rels: input.rels, slideSize: input.slideSize }));
+    else elements.push(renderTextShape(block, input.slideSize));
+  }
+  const bg = slideBackgroundColor(input.slideXml);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${input.slideSize.cx} ${input.slideSize.cy}" width="1920" height="1080" role="img">
+  <rect x="0" y="0" width="${input.slideSize.cx}" height="${input.slideSize.cy}" fill="${bg}"/>
+  ${elements.filter(Boolean).join("\n  ")}
+</svg>`;
+}
+
+async function extractPowerPointSlides(input: { buffer: Buffer; originalName: string; licenseId: string; uploadedById: string }) {
   const zip = await JSZip.loadAsync(input.buffer);
+  const presentationXml = await zip.file("ppt/presentation.xml")?.async("string");
+  const slideSize = readSlideSizeFromXml(presentationXml);
   const slidePaths = Object.keys(zip.files)
     .filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
     .sort((a, b) => slideNumberFromPath(a) - slideNumberFromPath(b));
-
   const extracted: ExtractedPowerPointSlide[] = [];
-  const baseTitle = input.originalName.replace(/\.[^.]+$/, "") || "powerpoint";
 
   for (const slidePath of slidePaths) {
     if (extracted.length >= MAX_EXTRACTED_POWERPOINT_SLIDES) break;
-
     const slideFile = zip.file(slidePath);
     if (!slideFile) continue;
-
     const slideXml = await slideFile.async("string");
     const relPath = slidePath.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
     const relXml = await zip.file(relPath)?.async("string");
-    if (!relXml) continue;
-
-    const rels = parseSlideRelationships(relXml, slidePath);
-    const candidates = [] as Array<{ path: string; buffer: Buffer; ext: string; mimeType: string }>;
-
-    for (const rId of imageRelationshipIds(slideXml)) {
-      const mediaPath = rels.get(rId);
-      if (!mediaPath) continue;
-      const mediaInfo = mediaInfoFromPath(mediaPath);
-      if (!mediaInfo) continue;
-      const mediaFile = zip.file(mediaPath);
-      if (!mediaFile) continue;
-      const buffer = await mediaFile.async("nodebuffer");
-      if (!buffer.length) continue;
-      candidates.push({ path: mediaPath, buffer, ext: mediaInfo.ext, mimeType: mediaInfo.mimeType });
-    }
-
-    if (candidates.length === 0) continue;
-
-    // A maioria dos PowerPoints usados em TVs tem uma imagem grande por slide.
-    // Quando houver várias imagens no mesmo slide, escolhemos a maior, que normalmente é o slide completo/background.
-    candidates.sort((a, b) => b.buffer.byteLength - a.buffer.byteLength);
-    const selected = candidates[0];
+    const rels = relXml ? parseSlideRelationships(relXml, slidePath) : new Map<string, string>();
     const slideNumber = slideNumberFromPath(slidePath);
-    const fileName = secureStoredFileName(selected.ext, `next-slide-ppt-slide-${String(slideNumber).padStart(2, "0")}`);
-
+    const svg = await renderSlideToSvg({ zip, slideXml, slideSize, rels });
+    const buffer = Buffer.from(svg, "utf8");
+    const fileName = secureStoredFileName("svg", `next-slide-ppt-slide-${String(slideNumber).padStart(2, "0")}`);
     const asset = await prisma.mediaAsset.create({
       data: {
         licenseId: input.licenseId,
         uploadedById: input.uploadedById,
         fileName,
-        mimeType: selected.mimeType,
-        sizeBytes: selected.buffer.byteLength,
-        dataBase64: selected.buffer.toString("base64")
+        mimeType: "image/svg+xml",
+        sizeBytes: buffer.byteLength,
+        dataBase64: buffer.toString("base64")
       }
     });
-
-    extracted.push({
-      slideNumber,
-      assetId: asset.id,
-      url: `/api/assets/${asset.id}/file`,
-      fileName,
-      mimeType: selected.mimeType,
-      sizeBytes: selected.buffer.byteLength
-    });
+    extracted.push({ slideNumber, assetId: asset.id, url: `/api/assets/${asset.id}/file`, fileName, mimeType: "image/svg+xml", sizeBytes: buffer.byteLength });
   }
 
-  if (extracted.length === 0) {
-    throw new Error("PPTX_WITHOUT_EXTRACTABLE_IMAGES");
-  }
-
-  return {
-    sourceName: input.originalName,
-    title: baseTitle,
-    extractedSlides: extracted
-  };
+  if (slidePaths.length > 0 && extracted.length === 0) throw new Error("PPTX_WITHOUT_EXTRACTABLE_IMAGES");
+  return { sourceName: input.originalName, title: input.originalName.replace(/\.[^.]+$/, "") || "powerpoint", extractedSlides: extracted };
 }
 
 export async function POST(request: Request) {
@@ -228,13 +376,9 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file");
 
-    if (!(file instanceof File)) {
-      return jsonError("Arquivo não enviado.", 400, "FILE_REQUIRED");
-    }
+    if (!(file instanceof File)) return jsonError("Arquivo não enviado.", 400, "FILE_REQUIRED");
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
+    const buffer = Buffer.from(await file.arrayBuffer());
     if (buffer.byteLength <= 0) return jsonError("Arquivo vazio ou inválido.", 422, "INVALID_FILE");
 
     const detection = detectFile(buffer, file.name || "arquivo");
@@ -262,16 +406,14 @@ export async function POST(request: Request) {
     if (detection.kind === "pptx") {
       try {
         const extracted = await extractPowerPointSlides({ buffer, originalName: file.name || "apresentacao.pptx", licenseId: user.licenseId, uploadedById: user.id });
-
         await auditLog({
           licenseId: user.licenseId,
           userId: user.id,
-          action: "EXTRACT_POWERPOINT_SLIDES",
+          action: "RENDER_POWERPOINT_SLIDES_TO_IMAGES",
           entity: "MediaAsset",
-          metadata: { sourceName: file.name, slidesExtracted: extracted.extractedSlides.length, sizeBytes: buffer.byteLength },
+          metadata: { sourceName: file.name, slidesExtracted: extracted.extractedSlides.length, sizeBytes: buffer.byteLength, output: "svg" },
           request
         });
-
         return json({
           ok: true,
           asset: {
@@ -280,21 +422,20 @@ export async function POST(request: Request) {
             mimeType: detection.mimeType,
             sizeBytes: buffer.byteLength,
             kind: "powerpoint",
-            conversion: "extracted-images",
+            conversion: "rendered-slide-images",
             url: null,
             slides: extracted.extractedSlides
           }
         }, 201);
       } catch (error) {
         if (error instanceof Error && error.message === "PPTX_WITHOUT_EXTRACTABLE_IMAGES") {
-          return jsonError("Este PowerPoint não possui imagens extraíveis por slide. Para TV 24/7, exporte a apresentação como imagens PNG/JPG ou use um PPTX onde cada slide seja uma imagem de fundo.", 422, "PPTX_WITHOUT_EXTRACTABLE_IMAGES");
+          return jsonError("Não foi possível ler os slides deste PowerPoint. Salve novamente como .pptx e tente enviar outra vez.", 422, "PPTX_WITHOUT_EXTRACTABLE_IMAGES");
         }
         throw error;
       }
     }
 
     const storedName = secureStoredFileName(detection.ext);
-
     const asset = await prisma.mediaAsset.create({
       data: {
         licenseId: user.licenseId,
