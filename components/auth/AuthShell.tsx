@@ -13,7 +13,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
       <div className="absolute inset-0 bg-[url('/brand/login-background.png')] bg-cover bg-center" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_35%,rgba(0,179,255,0.18),transparent_34%),linear-gradient(90deg,rgba(2,6,23,0.98)_0%,rgba(2,8,23,0.90)_34%,rgba(2,8,23,0.58)_63%,rgba(2,6,23,0.88)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_34%,rgba(0,179,255,0.16),transparent_34%),linear-gradient(90deg,rgba(2,6,23,0.98)_0%,rgba(2,8,23,0.91)_34%,rgba(2,8,23,0.58)_64%,rgba(2,6,23,0.88)_100%)]" />
       <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent" />
 
       <div className="relative z-10 flex min-h-screen flex-col px-6 py-8 lg:px-24">
@@ -56,13 +56,10 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
           </section>
 
           <section className="relative mx-auto w-full max-w-[520px]">
-            <div className="absolute -inset-[2px] rounded-[2rem] bg-[conic-gradient(from_0deg,#2563eb,#00d9ff,#7ddf00,#2563eb)] opacity-90 blur-[1px] [animation:nextSlideSpin_7s_linear_infinite]" />
-            <div className="absolute -inset-8 rounded-[2.5rem] bg-[conic-gradient(from_90deg,rgba(37,99,235,0.45),rgba(0,217,255,0.35),rgba(125,223,0,0.28),rgba(37,99,235,0.45))] opacity-50 blur-3xl [animation:nextSlideSpin_10s_linear_infinite_reverse]" />
-
-            <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/82 p-8 shadow-[0_30px_100px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-10">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(0,217,255,0.18),transparent_34%),radial-gradient(circle_at_100%_100%,rgba(125,223,0,0.13),transparent_36%)]" />
+            <div className="next-login-card">
+              <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-[radial-gradient(circle_at_18%_0%,rgba(0,217,255,0.14),transparent_35%),radial-gradient(circle_at_100%_100%,rgba(125,223,0,0.10),transparent_34%)]" />
               <div className="relative">
-                <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-200 shadow-[0_0_35px_rgba(0,217,255,0.18)]">
+                <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200 shadow-[0_0_35px_rgba(0,217,255,0.16)]">
                   <LockKeyhole size={22} />
                 </div>
 
@@ -86,9 +83,94 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
       </div>
 
       <style>{`
-        @keyframes nextSlideSpin {
+        .next-login-card {
+          position: relative;
+          overflow: hidden;
+          border-radius: 2rem;
+          padding: 2.5rem;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background:
+            linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.86)),
+            rgba(2, 6, 23, 0.88);
+          box-shadow:
+            0 30px 100px rgba(0, 0, 0, 0.58),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(24px);
+        }
+
+        .next-login-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: conic-gradient(
+            from var(--card-angle),
+            rgba(37, 99, 235, 0.16),
+            rgba(0, 217, 255, 0.72),
+            rgba(125, 223, 0, 0.55),
+            rgba(37, 99, 235, 0.16),
+            rgba(37, 99, 235, 0.16)
+          );
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+          animation: nextCardBorderFlow 7s linear infinite;
+        }
+
+        .next-login-card::after {
+          content: "";
+          position: absolute;
+          width: 190px;
+          height: 190px;
+          border-radius: 999px;
+          background: radial-gradient(circle, rgba(0, 217, 255, 0.24), rgba(125, 223, 0, 0.10) 42%, transparent 70%);
+          filter: blur(20px);
+          opacity: 0.52;
+          transform: translate(-50%, -50%);
+          animation: nextCardSoftSpot 9s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        @property --card-angle {
+          syntax: "<angle>";
+          initial-value: 0deg;
+          inherits: false;
+        }
+
+        @keyframes nextCardBorderFlow {
           to {
-            transform: rotate(360deg);
+            --card-angle: 360deg;
+          }
+        }
+
+        @keyframes nextCardSoftSpot {
+          0% {
+            left: 12%;
+            top: 12%;
+          }
+          25% {
+            left: 88%;
+            top: 18%;
+          }
+          50% {
+            left: 86%;
+            top: 86%;
+          }
+          75% {
+            left: 16%;
+            top: 82%;
+          }
+          100% {
+            left: 12%;
+            top: 12%;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .next-login-card {
+            padding: 2rem;
           }
         }
       `}</style>
