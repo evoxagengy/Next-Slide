@@ -1,4 +1,5 @@
 import { SecuritySeverity, UserRole } from "@prisma/client";
+import JSZip from "jszip";
 import { NextResponse } from "next/server";
 import { json, jsonError, handleApiError } from "@/lib/api";
 import { auditLog, securityEvent } from "@/lib/audit";
@@ -7,8 +8,12 @@ import { prisma } from "@/lib/db";
 import { assertBasicRateLimit } from "@/lib/rate-limit";
 import { assertSameOrigin, randomToken } from "@/lib/security";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_POWERPOINT_BYTES = 25 * 1024 * 1024;
+const MAX_EXTRACTED_POWERPOINT_SLIDES = 120;
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: "image/jpeg",
@@ -18,6 +23,29 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   gif: "image/gif",
   ppt: "application/vnd.ms-powerpoint",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+};
+
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif"
+};
+
+type DetectedFile =
+  | { ok: true; kind: "image"; ext: string; mimeType: string; maxBytes: number }
+  | { ok: true; kind: "pptx"; ext: "pptx"; mimeType: string; maxBytes: number }
+  | { ok: true; kind: "legacyPpt"; ext: "ppt"; mimeType: string; maxBytes: number }
+  | { ok: false; error: string };
+
+type ExtractedPowerPointSlide = {
+  slideNumber: number;
+  assetId: string;
+  url: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
 };
 
 function extensionOf(name: string) {
@@ -30,7 +58,7 @@ function hasPrefix(buffer: Buffer, prefix: number[]) {
   return prefix.every((value, index) => buffer[index] === value);
 }
 
-function detectFile(buffer: Buffer, originalName: string) {
+function detectFile(buffer: Buffer, originalName: string): DetectedFile {
   const ext = extensionOf(originalName);
 
   const isJpeg = hasPrefix(buffer, [0xff, 0xd8, 0xff]);
@@ -40,18 +68,155 @@ function detectFile(buffer: Buffer, originalName: string) {
   const isZipBased = hasPrefix(buffer, [0x50, 0x4b, 0x03, 0x04]) || hasPrefix(buffer, [0x50, 0x4b, 0x05, 0x06]) || hasPrefix(buffer, [0x50, 0x4b, 0x07, 0x08]);
   const isLegacyOffice = hasPrefix(buffer, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 
-  if ((ext === "jpg" || ext === "jpeg") && isJpeg) return { ok: true as const, kind: "image" as const, ext: "jpg", mimeType: "image/jpeg", maxBytes: MAX_IMAGE_BYTES };
-  if (ext === "png" && isPng) return { ok: true as const, kind: "image" as const, ext: "png", mimeType: "image/png", maxBytes: MAX_IMAGE_BYTES };
-  if (ext === "gif" && isGif) return { ok: true as const, kind: "image" as const, ext: "gif", mimeType: "image/gif", maxBytes: MAX_IMAGE_BYTES };
-  if (ext === "webp" && isWebp) return { ok: true as const, kind: "image" as const, ext: "webp", mimeType: "image/webp", maxBytes: MAX_IMAGE_BYTES };
-  if (ext === "pptx" && isZipBased) return { ok: true as const, kind: "powerpoint" as const, ext: "pptx", mimeType: MIME_BY_EXTENSION.pptx, maxBytes: MAX_POWERPOINT_BYTES };
-  if (ext === "ppt" && isLegacyOffice) return { ok: true as const, kind: "powerpoint" as const, ext: "ppt", mimeType: MIME_BY_EXTENSION.ppt, maxBytes: MAX_POWERPOINT_BYTES };
+  if ((ext === "jpg" || ext === "jpeg") && isJpeg) return { ok: true, kind: "image", ext: "jpg", mimeType: "image/jpeg", maxBytes: MAX_IMAGE_BYTES };
+  if (ext === "png" && isPng) return { ok: true, kind: "image", ext: "png", mimeType: "image/png", maxBytes: MAX_IMAGE_BYTES };
+  if (ext === "gif" && isGif) return { ok: true, kind: "image", ext: "gif", mimeType: "image/gif", maxBytes: MAX_IMAGE_BYTES };
+  if (ext === "webp" && isWebp) return { ok: true, kind: "image", ext: "webp", mimeType: "image/webp", maxBytes: MAX_IMAGE_BYTES };
+  if (ext === "pptx" && isZipBased) return { ok: true, kind: "pptx", ext: "pptx", mimeType: MIME_BY_EXTENSION.pptx, maxBytes: MAX_POWERPOINT_BYTES };
+  if (ext === "ppt" && isLegacyOffice) return { ok: true, kind: "legacyPpt", ext: "ppt", mimeType: MIME_BY_EXTENSION.ppt, maxBytes: MAX_POWERPOINT_BYTES };
 
-  return { ok: false as const, error: "Arquivo não permitido ou assinatura incompatível. Envie JPG, PNG, WEBP, GIF, PPT ou PPTX válido." };
+  return { ok: false, error: "Arquivo não permitido ou assinatura incompatível. Envie JPG, PNG, WEBP, GIF ou PPTX válido." };
 }
 
-function secureStoredFileName(extension: string) {
-  return `next-slide-${Date.now()}-${randomToken(10)}.${extension}`;
+function secureStoredFileName(extension: string, prefix = "next-slide") {
+  return `${prefix}-${Date.now()}-${randomToken(10)}.${extension}`;
+}
+
+function slideNumberFromPath(path: string) {
+  const match = path.match(/slide(\d+)\.xml$/i);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function normalizeZipPath(path: string) {
+  const output: string[] = [];
+  for (const segment of path.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") output.pop();
+    else output.push(segment);
+  }
+  return output.join("/");
+}
+
+function resolveRelationshipTarget(sourceSlidePath: string, target: string) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(target)) return null;
+  const base = sourceSlidePath.split("/").slice(0, -1).join("/");
+  return normalizeZipPath(`${base}/${target}`);
+}
+
+function readRelationshipAttributes(tag: string) {
+  const attrs = new Map<string, string>();
+  const regex = /([A-Za-z_:][\w:.-]*)\s*=\s*["']([^"']*)["']/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(tag))) attrs.set(match[1], match[2]);
+  return attrs;
+}
+
+function parseSlideRelationships(xml: string, slidePath: string) {
+  const relationships = new Map<string, string>();
+  const regex = /<Relationship\b[^>]*>/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(xml))) {
+    const attrs = readRelationshipAttributes(match[0]);
+    const id = attrs.get("Id");
+    const target = attrs.get("Target");
+    const targetMode = attrs.get("TargetMode")?.toLowerCase();
+    if (!id || !target || targetMode === "external") continue;
+    const resolved = resolveRelationshipTarget(slidePath, target);
+    if (resolved) relationships.set(id, resolved);
+  }
+  return relationships;
+}
+
+function imageRelationshipIds(slideXml: string) {
+  return Array.from(slideXml.matchAll(/<a:blip\b[^>]*(?:r:embed|r:link)=["']([^"']+)["'][^>]*>/g)).map((match) => match[1]);
+}
+
+function mediaInfoFromPath(path: string) {
+  const ext = extensionOf(path);
+  const mimeType = IMAGE_MIME_BY_EXTENSION[ext];
+  if (!mimeType) return null;
+  return { ext: ext === "jpeg" ? "jpg" : ext, mimeType };
+}
+
+async function extractPowerPointSlides(input: {
+  buffer: Buffer;
+  originalName: string;
+  licenseId: string;
+  uploadedById: string;
+}) {
+  const zip = await JSZip.loadAsync(input.buffer);
+  const slidePaths = Object.keys(zip.files)
+    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/i.test(path))
+    .sort((a, b) => slideNumberFromPath(a) - slideNumberFromPath(b));
+
+  const extracted: ExtractedPowerPointSlide[] = [];
+  const baseTitle = input.originalName.replace(/\.[^.]+$/, "") || "powerpoint";
+
+  for (const slidePath of slidePaths) {
+    if (extracted.length >= MAX_EXTRACTED_POWERPOINT_SLIDES) break;
+
+    const slideFile = zip.file(slidePath);
+    if (!slideFile) continue;
+
+    const slideXml = await slideFile.async("string");
+    const relPath = slidePath.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
+    const relXml = await zip.file(relPath)?.async("string");
+    if (!relXml) continue;
+
+    const rels = parseSlideRelationships(relXml, slidePath);
+    const candidates = [] as Array<{ path: string; buffer: Buffer; ext: string; mimeType: string }>;
+
+    for (const rId of imageRelationshipIds(slideXml)) {
+      const mediaPath = rels.get(rId);
+      if (!mediaPath) continue;
+      const mediaInfo = mediaInfoFromPath(mediaPath);
+      if (!mediaInfo) continue;
+      const mediaFile = zip.file(mediaPath);
+      if (!mediaFile) continue;
+      const buffer = await mediaFile.async("nodebuffer");
+      if (!buffer.length) continue;
+      candidates.push({ path: mediaPath, buffer, ext: mediaInfo.ext, mimeType: mediaInfo.mimeType });
+    }
+
+    if (candidates.length === 0) continue;
+
+    // A maioria dos PowerPoints usados em TVs tem uma imagem grande por slide.
+    // Quando houver várias imagens no mesmo slide, escolhemos a maior, que normalmente é o slide completo/background.
+    candidates.sort((a, b) => b.buffer.byteLength - a.buffer.byteLength);
+    const selected = candidates[0];
+    const slideNumber = slideNumberFromPath(slidePath);
+    const fileName = secureStoredFileName(selected.ext, `next-slide-ppt-slide-${String(slideNumber).padStart(2, "0")}`);
+
+    const asset = await prisma.mediaAsset.create({
+      data: {
+        licenseId: input.licenseId,
+        uploadedById: input.uploadedById,
+        fileName,
+        mimeType: selected.mimeType,
+        sizeBytes: selected.buffer.byteLength,
+        dataBase64: selected.buffer.toString("base64")
+      }
+    });
+
+    extracted.push({
+      slideNumber,
+      assetId: asset.id,
+      url: `/api/assets/${asset.id}/file`,
+      fileName,
+      mimeType: selected.mimeType,
+      sizeBytes: selected.buffer.byteLength
+    });
+  }
+
+  if (extracted.length === 0) {
+    throw new Error("PPTX_WITHOUT_EXTRACTABLE_IMAGES");
+  }
+
+  return {
+    sourceName: input.originalName,
+    title: baseTitle,
+    extractedSlides: extracted
+  };
 }
 
 export async function POST(request: Request) {
@@ -88,6 +253,44 @@ export async function POST(request: Request) {
     if (buffer.byteLength > detection.maxBytes) {
       const mb = Math.round(detection.maxBytes / 1024 / 1024);
       return jsonError(`Arquivo muito grande. Limite atual: ${mb} MB.`, 422, "FILE_TOO_LARGE");
+    }
+
+    if (detection.kind === "legacyPpt") {
+      return jsonError("Arquivos .ppt antigos não podem ser convertidos com segurança no servidor. Salve a apresentação como .pptx e envie novamente.", 422, "LEGACY_PPT_NOT_SUPPORTED");
+    }
+
+    if (detection.kind === "pptx") {
+      try {
+        const extracted = await extractPowerPointSlides({ buffer, originalName: file.name || "apresentacao.pptx", licenseId: user.licenseId, uploadedById: user.id });
+
+        await auditLog({
+          licenseId: user.licenseId,
+          userId: user.id,
+          action: "EXTRACT_POWERPOINT_SLIDES",
+          entity: "MediaAsset",
+          metadata: { sourceName: file.name, slidesExtracted: extracted.extractedSlides.length, sizeBytes: buffer.byteLength },
+          request
+        });
+
+        return json({
+          ok: true,
+          asset: {
+            id: null,
+            fileName: file.name,
+            mimeType: detection.mimeType,
+            sizeBytes: buffer.byteLength,
+            kind: "powerpoint",
+            conversion: "extracted-images",
+            url: null,
+            slides: extracted.extractedSlides
+          }
+        }, 201);
+      } catch (error) {
+        if (error instanceof Error && error.message === "PPTX_WITHOUT_EXTRACTABLE_IMAGES") {
+          return jsonError("Este PowerPoint não possui imagens extraíveis por slide. Para TV 24/7, exporte a apresentação como imagens PNG/JPG ou use um PPTX onde cada slide seja uma imagem de fundo.", 422, "PPTX_WITHOUT_EXTRACTABLE_IMAGES");
+        }
+        throw error;
+      }
     }
 
     const storedName = secureStoredFileName(detection.ext);

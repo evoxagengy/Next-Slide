@@ -11,7 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
-const POWERPOINT_ACCEPT = ".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const POWERPOINT_ACCEPT = ".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 type MediaItem = {
   id: string;
@@ -74,16 +74,36 @@ function emptySite(): SiteItem {
   return { id: makeId(), title: "", url: "", duration: "", refreshInterval: "", openMode: "IFRAME" };
 }
 
+type ExtractedPowerPointSlide = {
+  slideNumber: number;
+  assetId: string;
+  url: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+type UploadedAsset = {
+  id: string | null;
+  url: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  kind: "image" | "powerpoint";
+  conversion?: "extracted-images";
+  slides?: ExtractedPowerPointSlide[];
+};
+
 async function uploadAsset(file: File) {
   const formData = new FormData();
   formData.append("file", file);
   const response = await fetch("/api/assets", { method: "POST", body: formData });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || `Não foi possível enviar ${file.name}.`);
-  return data.asset as { id: string; url: string; fileName: string; mimeType: string; sizeBytes: number; kind: "image" | "powerpoint" };
+  return data.asset as UploadedAsset;
 }
 
-async function compactFileItems(items: MediaItem[], fallbackDuration: number, fit: "COVER" | "CONTAIN") {
+async function compactImageItems(items: MediaItem[], fallbackDuration: number, fit: "COVER" | "CONTAIN") {
   const result = [] as Array<{
     title: string | null;
     url: string;
@@ -95,6 +115,7 @@ async function compactFileItems(items: MediaItem[], fallbackDuration: number, fi
 
   for (const item of items) {
     const asset = await uploadAsset(item.file);
+    if (!asset.url) throw new Error(`Não foi possível gerar URL para ${item.fileName}.`);
     result.push({
       title: item.title.trim() || cleanFileTitle(asset.fileName),
       url: asset.url,
@@ -103,6 +124,39 @@ async function compactFileItems(items: MediaItem[], fallbackDuration: number, fi
       openMode: "IFRAME",
       refreshInterval: null
     });
+  }
+
+  return result;
+}
+
+
+async function compactPowerPointItems(items: MediaItem[], fallbackDuration: number) {
+  const result = [] as Array<{
+    title: string | null;
+    url: string;
+    duration: number;
+    fit: "COVER" | "CONTAIN";
+    openMode: "IFRAME" | "NEW_TAB" | "PROXY";
+    refreshInterval: number | null;
+  }>;
+
+  for (const item of items) {
+    const asset = await uploadAsset(item.file);
+    if (!asset.slides?.length) {
+      throw new Error(`${item.fileName} não gerou imagens. Envie um PPTX com slides em imagem ou exporte a apresentação como PNG/JPG.`);
+    }
+
+    const baseTitle = item.title.trim() || cleanFileTitle(item.fileName);
+    for (const slide of asset.slides) {
+      result.push({
+        title: `${baseTitle} - Slide ${String(slide.slideNumber).padStart(2, "0")}`,
+        url: slide.url,
+        duration: item.duration ? Number(item.duration) : fallbackDuration,
+        fit: "COVER",
+        openMode: "IFRAME",
+        refreshInterval: null
+      });
+    }
   }
 
   return result;
@@ -173,8 +227,8 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
       if (totalValidSlides === 0) throw new Error("Adicione pelo menos uma imagem, site ou PowerPoint.");
 
       const [uploadedImages, uploadedPowerPoints, logoAsset] = await Promise.all([
-        compactFileItems(images, imageSeconds, "COVER"),
-        compactFileItems(powerPoints, imageSeconds, "CONTAIN"),
+        compactImageItems(images, imageSeconds, "COVER"),
+        compactPowerPointItems(powerPoints, imageSeconds),
         logoFile ? uploadAsset(logoFile) : Promise.resolve(null)
       ]);
 
@@ -189,9 +243,9 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
         siteDuration: siteSeconds,
         powerPointDuration: imageSeconds,
         showSiteEveryImages: Number(showSiteEveryImages || 0),
-        images: uploadedImages,
+        images: [...uploadedImages, ...uploadedPowerPoints],
         sites: compactSites(sites, siteSeconds),
-        powerPoints: uploadedPowerPoints
+        powerPoints: []
       };
 
       const response = await fetch("/api/modules", {
@@ -282,11 +336,11 @@ export function ModuleCreateForm({ modalMode = false, onCreated, onCancel }: Mod
       <FileTableSection
         icon={<Presentation size={22} />}
         title="PowerPoints"
-        description="Selecione arquivos .ppt ou .pptx. Eles usam o mesmo tempo global das imagens."
+        description="Selecione arquivos .pptx. O Next Slide vai extrair cada slide como imagem e exibir automaticamente na TV."
         items={powerPoints}
         kind="powerPoints"
         accept={POWERPOINT_ACCEPT}
-        addLabel="Selecionar PowerPoints"
+        addLabel="Selecionar PPTX"
         addFiles={addFiles}
         update={updateFile}
         remove={removeFile}

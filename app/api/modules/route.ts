@@ -125,8 +125,10 @@ function buildBulkSlides(data: BulkModuleData): PendingSlide[] {
     });
   }
 
+  // PowerPoints enviados pela interface nova já chegam como imagens extraídas.
+  // Mantemos compatibilidade com payloads antigos tratando qualquer item em powerPoints como imagem fullscreen.
   powerPointSlides.forEach(({ item, index }) => {
-    ordered.push({ item, type: SlideType.POWERPOINT, fallbackTitle: `PowerPoint ${index + 1}`, fallbackDuration: data.powerPointDuration, fit: SlideFit.CONTAIN, openMode: SlideOpenMode.IFRAME });
+    ordered.push({ item, type: SlideType.IMAGE, fallbackTitle: `PowerPoint - Slide ${index + 1}`, fallbackDuration: data.powerPointDuration, fit: SlideFit.COVER, openMode: SlideOpenMode.IFRAME });
   });
 
   return ordered.map((slide, index) => toPendingSlide({ ...slide, sortOrder: index + 1 }));

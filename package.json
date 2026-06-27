@@ -1,51 +1,52 @@
 {
-    "name":  "next-slide",
-    "version":  "1.0.0",
-    "private":  true,
-    "description":  "Next Slide - SaaS para gest??o ?? vista em TVs corporativas.",
-    "scripts":  {
-                    "dev":  "next dev",
-                    "build":  "prisma generate \u0026\u0026 next build",
-                    "start":  "next start",
-                    "lint":  "eslint .",
-                    "prisma:generate":  "dotenv -e .env.local -- prisma generate",
-                    "prisma:push":  "dotenv -e .env.local -- prisma db push",
-                    "prisma:seed":  "dotenv -e .env.local -- prisma db seed",
-                    "db:studio":  "dotenv -e .env.local -- prisma studio"
-                },
-    "dependencies":  {
-                         "@prisma/client":  "^6.10.1",
-                         "bcryptjs":  "^3.0.2",
-                         "class-variance-authority":  "^0.7.1",
-                         "clsx":  "^2.1.1",
-                         "framer-motion":  "^12.18.1",
-                         "lucide-react":  "^0.468.0",
-                         "next":  "^15.3.4",
-                         "react":  "^19.1.0",
-                         "react-dom":  "^19.1.0",
-                         "tailwind-merge":  "^2.6.0",
-                         "zod":  "^3.25.67"
-                     },
-    "devDependencies":  {
-                            "@types/bcryptjs":  "^2.4.6",
-                            "@types/node":  "^22.15.30",
-                            "@types/react":  "^19.1.8",
-                            "@types/react-dom":  "^19.1.6",
-                            "autoprefixer":  "^10.4.21",
-                            "dotenv-cli":  "^7.4.4",
-                            "eslint":  "^9.28.0",
-                            "eslint-config-next":  "^15.3.4",
-                            "postcss":  "^8.5.6",
-                            "prisma":  "^6.10.1",
-                            "tailwindcss":  "^3.4.17",
-                            "tsx":  "^4.20.3",
-                            "typescript":  "^5.8.3"
-                        },
-    "prisma":  {
-                   "seed":  "tsx prisma/seed.ts"
-               },
-    "packageManager":  "yarn@1.22.22",
-    "engines":  {
-                    "node":  "24.x"
-                }
+  "name": "next-slide",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Next Slide - SaaS para gestão à vista em TVs corporativas.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "prisma:generate": "dotenv -e .env.local -- prisma generate",
+    "prisma:push": "dotenv -e .env.local -- prisma db push",
+    "prisma:seed": "dotenv -e .env.local -- prisma db seed",
+    "db:studio": "dotenv -e .env.local -- prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.10.1",
+    "bcryptjs": "^3.0.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.18.1",
+    "lucide-react": "^0.468.0",
+    "next": "^15.3.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.25.67",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "autoprefixer": "^10.4.21",
+    "dotenv-cli": "^7.4.4",
+    "eslint": "^9.28.0",
+    "eslint-config-next": "^15.3.4",
+    "postcss": "^8.5.6",
+    "prisma": "^6.10.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": "24.x"
+  }
 }
