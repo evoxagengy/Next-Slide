@@ -1,23 +1,41 @@
-# Next Slide — PPTX Render Slides v3
+# Next Slide — Gerenciador, Empresas, Planos e Controle PPTX v1
 
 ## Objetivo
+Criar a tela Gerenciador no lugar da tela Usuários, permitindo ao usuário master administrar empresas, usuários, planos e limites de licenças.
 
-Corrigir a conversão de PowerPoint para que cada slide do `.pptx` vire uma imagem própria dentro do Next Slide.
+## O que foi alterado
+- Sidebar: item Usuários renomeado para Gerenciador.
+- Tela /users redesenhada como Gerenciador.
+- Abas: Usuários e Empresas.
+- Usuários: filtro por empresa, criação de usuário vinculado a uma empresa, alteração de papel e ativação/desativação.
+- Empresas: criação de empresa, edição de plano, status e quantidade de licenças de usuário.
+- Planos adicionados:
+  - Basic: até 20 módulos e sem conversão PPTX.
+  - Premium: até 100 módulos e com conversão PPTX.
+  - Enterprise: sem limite operacional de módulos e com conversão PPTX.
+- Backend: APIs novas em /api/manager.
+- Segurança: apenas usuário master/plataforma pode criar/editar empresas.
+- PPTX: conversão bloqueada para plano Basic/Trial e liberada para Premium/Enterprise.
 
-## Correção aplicada
+## Variável opcional
+NEXT_SLIDE_PLATFORM_OWNER_EMAILS=santos.bruno@engenixsystem.com.br,evoxagengy@gmail.com
 
-Antes, o backend procurava imagens incorporadas dentro de cada slide e escolhia a maior imagem encontrada. Isso fazia slides sem imagem de fundo, ou slides compostos por texto e formas, serem ignorados.
+Se não configurar, o sistema usa esses e-mails como padrão para identificar o usuário master da plataforma.
 
-Agora, o backend percorre todos os arquivos `ppt/slides/slideN.xml` do `.pptx`, respeitando a ordem da apresentação, e gera um SVG por slide. Esse SVG é salvo como `MediaAsset` com MIME `image/svg+xml`, sendo exibido pelo player como uma imagem fullscreen normal.
+## Banco
+O Prisma adiciona os novos valores do enum LicensePlan:
+- BASIC => basic
+- PREMIUM => premium
 
-## Resultado esperado
+Os valores antigos TRIAL e PRO continuam no schema para compatibilidade com registros antigos.
 
-- PPTX com 2 slides gera 2 imagens.
-- PPTX com 50 slides gera 50 imagens.
-- Slides com texto também geram imagem.
-- Slides com imagens internas também geram imagem.
-- A ordem dos slides é preservada.
-
-## Observação técnica
-
-Essa é uma renderização própria em SVG, compatível com Vercel e sem depender de LibreOffice/headless browser. Ela cobre textos básicos, imagens e posicionamento principal. Para fidelidade 100% idêntica ao PowerPoint desktop, futuramente será necessário um worker externo com LibreOffice/CloudConvert.
+## Teste esperado
+1. Entrar com usuário master.
+2. Abrir Gerenciador.
+3. Criar empresa Basic.
+4. Criar empresa Premium.
+5. Criar usuário em uma empresa selecionada.
+6. Alterar plano de uma empresa.
+7. Confirmar limite de módulos refletido na tabela.
+8. Em empresa Basic, tentar enviar PPTX e receber bloqueio de plano.
+9. Em empresa Premium/Enterprise, enviar PPTX e converter.

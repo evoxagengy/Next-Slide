@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/modules", label: "Módulos", icon: MonitorPlay },
-  { href: "/users", label: "Usuários", icon: Users },
+  { href: "/users", label: "Gerenciador", icon: Users },
   { href: "/license", label: "Licença", icon: ShieldCheck },
   { href: "/settings", label: "Configurações", icon: Settings }
 ];

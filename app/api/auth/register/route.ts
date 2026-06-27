@@ -19,16 +19,16 @@ export async function POST(request: Request) {
       return jsonError("Não foi possível criar a conta com estes dados.", 409, "ACCOUNT_EXISTS");
     }
 
-    const trialLimits = PLAN_LIMITS.TRIAL;
+    const basicLimits = PLAN_LIMITS.BASIC;
     const result = await prisma.$transaction(async (tx) => {
       const license = await tx.license.create({
         data: {
           companyName: sanitizeText(data.companyName, 120),
-          plan: LicensePlan.TRIAL,
+          plan: LicensePlan.BASIC,
           status: LicenseStatus.TRIAL,
-          maxUsers: trialLimits.maxUsers,
-          maxModules: trialLimits.maxModules,
-          maxSlidesPerModule: trialLimits.maxSlidesPerModule,
+          maxUsers: basicLimits.maxUsers,
+          maxModules: basicLimits.maxModules,
+          maxSlidesPerModule: basicLimits.maxSlidesPerModule,
           startsAt: new Date(),
           expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
         }

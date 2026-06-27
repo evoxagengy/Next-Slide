@@ -16,7 +16,9 @@ enum UserRole {
 
 enum LicensePlan {
   TRIAL      @map("trial")
+  BASIC      @map("basic")
   PRO        @map("pro")
+  PREMIUM    @map("premium")
   ENTERPRISE @map("enterprise")
 }
 
@@ -57,7 +59,7 @@ enum SecuritySeverity {
 model License {
   id                 String        @id @default(cuid())
   companyName        String
-  plan               LicensePlan   @default(TRIAL)
+  plan               LicensePlan   @default(BASIC)
   status             LicenseStatus @default(TRIAL)
   maxUsers           Int           @default(1)
   maxModules         Int           @default(2)

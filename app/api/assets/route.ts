@@ -5,6 +5,7 @@ import { json, jsonError, handleApiError } from "@/lib/api";
 import { auditLog, securityEvent } from "@/lib/audit";
 import { requireApiRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { canUsePptxConversion } from "@/lib/license";
 import { assertBasicRateLimit } from "@/lib/rate-limit";
 import { assertSameOrigin, randomToken } from "@/lib/security";
 
@@ -401,6 +402,18 @@ export async function POST(request: Request) {
 
     if (detection.kind === "legacyPpt") {
       return jsonError("Arquivos .ppt antigos não podem ser convertidos com segurança no servidor. Salve a apresentação como .pptx e envie novamente.", 422, "LEGACY_PPT_NOT_SUPPORTED");
+    }
+
+    if (detection.kind === "pptx" && !canUsePptxConversion(user.license.plan)) {
+      await securityEvent({
+        licenseId: user.licenseId,
+        userId: user.id,
+        eventType: "PPTX_CONVERSION_BLOCKED_BY_PLAN",
+        severity: SecuritySeverity.LOW,
+        metadata: { plan: user.license.plan, sizeBytes: buffer.byteLength },
+        request
+      });
+      return jsonError("Conversão de PPTX para imagens está disponível apenas nos planos Premium e Enterprise.", 403, "PLAN_REQUIRES_PREMIUM");
     }
 
     if (detection.kind === "pptx") {

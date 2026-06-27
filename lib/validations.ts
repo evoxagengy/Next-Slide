@@ -1,4 +1,4 @@
-import { SlideFit, SlideOpenMode, SlideType, UserRole } from "@prisma/client";
+import { LicensePlan, LicenseStatus, SlideFit, SlideOpenMode, SlideType, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { validateStrongPassword } from "@/lib/security";
 
@@ -33,8 +33,7 @@ export const moduleCreateSchema = z.object({
   defaultDuration: durationSchema.default(15),
   defaultTransition: transitionSchema,
   theme: z.string().max(40).default("next-dark"),
-  logoUrl: optionalAssetOrUrlSchema,
-  showClock: z.boolean().default(true)
+  logoUrl: optionalAssetOrUrlSchema
 });
 
 const moduleBulkItemSchema = z.object({
@@ -111,6 +110,38 @@ export const userCreateSchema = z.object({
 });
 
 export const userUpdateSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  role: z.nativeEnum(UserRole).optional(),
+  isActive: z.boolean().optional()
+});
+
+
+export const managerCompanyCreateSchema = z.object({
+  companyName: z.string().min(2, "Informe o nome da empresa.").max(120),
+  plan: z.nativeEnum(LicensePlan).refine((value) => ([LicensePlan.BASIC, LicensePlan.PREMIUM, LicensePlan.ENTERPRISE] as LicensePlan[]).includes(value), "Selecione Basic, Premium ou Enterprise.").default(LicensePlan.BASIC),
+  status: z.nativeEnum(LicenseStatus).default(LicenseStatus.ACTIVE),
+  maxUsers: z.coerce.number().int().min(1).max(9999).default(5),
+  expiresAt: z.string().datetime().optional().nullable().or(z.literal(""))
+});
+
+export const managerCompanyUpdateSchema = z.object({
+  companyName: z.string().min(2).max(120).optional(),
+  plan: z.nativeEnum(LicensePlan).refine((value) => ([LicensePlan.BASIC, LicensePlan.PREMIUM, LicensePlan.ENTERPRISE] as LicensePlan[]).includes(value), "Selecione Basic, Premium ou Enterprise.").optional(),
+  status: z.nativeEnum(LicenseStatus).optional(),
+  maxUsers: z.coerce.number().int().min(1).max(9999).optional(),
+  expiresAt: z.string().datetime().optional().nullable().or(z.literal(""))
+});
+
+export const managerUserCreateSchema = z.object({
+  licenseId: z.string().min(1, "Selecione a empresa."),
+  name: z.string().min(2, "Informe o nome.").max(120),
+  email: z.string().email("Informe um e-mail válido.").max(180).transform((v) => v.toLowerCase().trim()),
+  password: passwordSchema,
+  role: z.nativeEnum(UserRole).default(UserRole.VIEWER)
+});
+
+export const managerUserUpdateSchema = z.object({
+  licenseId: z.string().min(1).optional(),
   name: z.string().min(2).max(120).optional(),
   role: z.nativeEnum(UserRole).optional(),
   isActive: z.boolean().optional()
