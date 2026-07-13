@@ -61,6 +61,7 @@ export async function getPlayerModule(publicToken: string): Promise<PlayerModule
       license: {
         select: {
           companyName: true,
+          plan: true,
           status: true,
           expiresAt: true
         }

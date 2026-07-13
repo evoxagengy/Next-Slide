@@ -24,7 +24,7 @@ export async function canAccessAssetWithPublicToken(assetId: string, licenseId: 
       licenseId: true,
       isActive: true,
       logoUrl: true,
-      license: { select: { status: true, expiresAt: true } },
+      license: { select: { plan: true, status: true, expiresAt: true } },
       slides: {
         where: { isActive: true },
         select: { contentUrl: true }
@@ -46,7 +46,7 @@ export async function isPublicTokenAllowedForExternalSlide(input: {
     where: { publicTokenHash: sha256(input.publicToken) },
     select: {
       isActive: true,
-      license: { select: { status: true, expiresAt: true } },
+      license: { select: { plan: true, status: true, expiresAt: true } },
       slides: {
         where: {
           isActive: true,

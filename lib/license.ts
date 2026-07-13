@@ -22,10 +22,15 @@ export function canUsePptxConversion(plan: LicensePlan) {
   return plan === LicensePlan.PREMIUM || plan === LicensePlan.ENTERPRISE || plan === LicensePlan.PRO;
 }
 
-export function isLicenseUsable(license: Pick<License, "status" | "expiresAt">) {
+export function isLicenseUsable(license: Pick<License, "status" | "expiresAt"> & { plan?: LicensePlan | null }) {
   const validStatus = license.status === LicenseStatus.ACTIVE || license.status === LicenseStatus.TRIAL;
-  const notExpired = !license.expiresAt || license.expiresAt.getTime() > Date.now();
-  return validStatus && notExpired;
+  if (!validStatus) return false;
+
+  // Enterprise é tratado como licença sem vencimento operacional.
+  // A licença ainda pode ser bloqueada com status SUSPENDED, CANCELLED ou EXPIRED.
+  if (license.plan === LicensePlan.ENTERPRISE) return true;
+
+  return !license.expiresAt || license.expiresAt.getTime() > Date.now();
 }
 
 export function licenseStatusLabel(status: LicenseStatus) {
